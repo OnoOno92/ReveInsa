@@ -9,6 +9,7 @@ signal teleported(pos: Vector2)
 signal died
 signal player_hurt(amount: float)
 signal new_day(day: int)
+signal sighting_resolved(sighting: Dictionary, caught: bool)
 
 var save_path := "user://save_v1.json"
 const DAY_SECONDS := 300.0 # real seconds per in-game day
@@ -20,6 +21,9 @@ var p := {}
 var time := 0.12 # days; fractional part = time of day
 var flags := {}
 var campfires: Array = [] # {pos: Vector2, until: float}
+## Wild Gu sightings, see game/sightings.gd: {id, def, pos: Vector2, until, progress, need}
+var sightings: Array = []
+var _sight_t := 12.0 # first rumour comes early
 var build := {}
 var shield := 0.0
 var last_hurt := -99.0
@@ -62,6 +66,8 @@ func new_game(player_name: String, world_seed := -1) -> Dictionary:
 	time = 0.12
 	flags = {}
 	campfires = []
+	sightings = []
+	_sight_t = 12.0
 	shield = 0.0
 	add_gu("moonlight", true, "starter")
 	add_gu("stone_skin" if rng.randf() < 0.5 else "vitality_leaf", true, "starter")
@@ -89,6 +95,10 @@ func save_game() -> void:
 	var data := {
 		"v": 1, "seed": world.seed_value, "time": time, "player": pd, "flags": flags,
 		"depleted": depleted, "campfires": fires, "explored": Marshalls.raw_to_base64(world.explored),
+		"sightings": sightings.map(func(sg):
+			var c: Dictionary = sg.duplicate()
+			c["pos"] = [sg["pos"].x, sg["pos"].y]
+			return c),
 	}
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f:
@@ -134,6 +144,10 @@ func load_game() -> bool:
 		var n = by_id.get(int(d[0]))
 		if n:
 			n["regrow_day"] = float(d[1]); n["hp"] = int(d[2])
+	sightings = []
+	for sg in data.get("sightings", []):
+		sightings.append({"id": int(sg["id"]), "def": sg["def"], "pos": Vector2(sg["pos"][0], sg["pos"][1]),
+			"until": float(sg["until"]), "progress": float(sg["progress"]), "need": float(sg["need"])})
 	campfires = []
 	for c in data.get("campfires", []):
 		campfires.append({"pos": Vector2(c["x"], c["y"]), "until": float(c["until"])})
@@ -634,8 +648,78 @@ func tick(delta: float) -> void:
 	if clock - last_hurt > 3.0 and stat("shield") > 0.0:
 		shield = minf(stat("shield"), shield + stat("shield") * 0.15 * delta)
 	campfires = campfires.filter(func(c): return c["until"] > time)
+	_update_sightings(delta)
 	if p["hp"] <= 0.0:
 		die("You starved.")
+
+
+# ------------------------------------------------------------------ wild Gu sightings
+## The sighting the player is currently channelling (empty if none).
+func channelling() -> Dictionary:
+	for sg in sightings:
+		if (sg["pos"] as Vector2).distance_to(p["pos"]) <= Sightings.RADIUS:
+			return sg
+	return {}
+
+func spawn_sighting(def_id := "", at := Vector2.INF) -> Dictionary:
+	var pos := at
+	if pos == Vector2.INF:
+		for attempt in 16:
+			var cand: Vector2 = p["pos"] + Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(Sightings.DISTANCE_TILES.x, Sightings.DISTANCE_TILES.y) * WorldData.TILE
+			var t := WorldData.to_tile(cand)
+			if WorldData.in_bounds(t) and not world.is_solid_pos(cand) and not world.is_safe(cand) and world.zone_at(cand) != "wall":
+				pos = cand
+				break
+		if pos == Vector2.INF:
+			return {}
+	var hab := Sightings.habitat(world, pos)
+	if def_id == "":
+		def_id = Sightings.pick(rng, hab, is_night(), p["rank"])
+	flags["sighting_id"] = int(flags.get("sighting_id", 0)) + 1
+	var sg := {"id": flags["sighting_id"], "def": def_id, "pos": pos,
+		"until": time + rng.randf_range(Sightings.LIFETIME_DAYS.x, Sightings.LIFETIME_DAYS.y),
+		"progress": 0.0, "need": Sightings.capture_time(def_id, p["rank"])}
+	sightings.append(sg)
+	toast.emit("Rumour: a wild %s was seen %s, %s." % [GuDB.GU[def_id]["name"], Sightings.direction_text(p["pos"], pos), Sightings.HABITAT_TEXT[hab]], "good")
+	changed.emit()
+	return sg
+
+func _update_sightings(delta: float) -> void:
+	for sg in sightings.duplicate():
+		if sg["until"] < time:
+			sightings.erase(sg)
+			if sg["progress"] > 0.0:
+				toast.emit("The %s slipped away before you could bind it." % GuDB.GU[sg["def"]]["name"], "bad")
+			changed.emit()
+	_sight_t -= delta
+	if _sight_t <= 0.0:
+		_sight_t = rng.randf_range(Sightings.SPAWN_SECONDS.x, Sightings.SPAWN_SECONDS.y)
+		if sightings.size() < Sightings.MAX_ACTIVE:
+			spawn_sighting()
+	var here := channelling()
+	for sg in sightings:
+		if sg == here:
+			sg["progress"] += delta
+		else:
+			sg["progress"] = maxf(0.0, sg["progress"] - delta * 0.5)
+	if not here.is_empty() and here["progress"] >= here["need"]:
+		_resolve_sighting(here)
+
+func _resolve_sighting(sg: Dictionary) -> void:
+	sightings.erase(sg)
+	var nm: String = GuDB.GU[sg["def"]]["name"]
+	if rng.randf() < Sightings.capture_chance(sg["def"], p["rank"], p["aptitude"]):
+		var caught := add_gu(sg["def"], false, "wild")
+		if caught["shiny"]:
+			toast.emit("A SHINY %s! One in five hundred... (%s)" % [nm, GuRoll.summary(caught)], "gold")
+		else:
+			toast.emit("You bound the wild %s! (%s)" % [nm, GuRoll.summary(caught)], "gold")
+		sighting_resolved.emit(sg, true)
+	else:
+		toast.emit("The wild %s broke free and vanished!" % nm, "bad")
+		sighting_resolved.emit(sg, false)
+	changed.emit()
+	save_game()
 
 func hurt_player(dmg: float, source: String) -> void:
 	last_hurt = clock
@@ -649,6 +733,9 @@ func hurt_player(dmg: float, source: String) -> void:
 		return
 	p["hp"] -= d
 	player_hurt.emit(d)
+	var ch := channelling()
+	if not ch.is_empty():
+		ch["progress"] *= 0.6 # pain breaks your concentration
 	if p["hp"] <= 0.0:
 		die("You were slain by a %s." % source)
 

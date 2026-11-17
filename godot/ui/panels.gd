@@ -411,6 +411,8 @@ func _help(box: VBoxContainer) -> void:
 		"[b]Cultivate[/b] with the Clan Elder to rank up. Use the caravan to reach Shang Clan City for rarer Gu.",
 		"[b]Clan missions[/b]: the village elder posts hunts, deliveries and scouting jobs. They pay stones and [b]clan contribution[/b], which buys rare Gu and pills in the Clan Treasury.",
 		"[b]Beast tides[/b]: every 5th night beasts storm Shi Lan Village. Clan guards hold the corners; every beast you slay earns stones and contribution at dawn.",
+		"[b]Wild Gu sightings[/b]: rumours point you to wild Gu (shown on the map). Stand in the glowing ring to bind it. Leaving the ring or taking hits sets you back, and the Gu may still break free.",
+		"[b]Unique Gu[/b]: every Gu has a grade (F-S), a nature and four potentials (power, speed, efficiency, durability). Wild Gu can be shiny (1 in 512).",
 		"[b]Enslavement path[/b]: the Wolf Enslavement Gu binds a wolf that fights beside you and returns after it falls.",
 		"[b]Regional Walls[/b] seal the Southern Border on the north, west and east. Mortals cannot pass.",
 		"The [b]Myriad Beast Mire[/b] (southwest) is forbidden ground ruled by a Beast King. The [b]ruins[/b] (northwest) hide an inheritance.",

@@ -3,6 +3,7 @@ extends Node
 ## Debug/screenshot args (via tools/godot.sh shot ... -- --autostart=1 ...):
 ##   --autostart=1 --seed=N --night=1 --at=ruins|city|forbidden|wild --enemies=N
 ##   --give=moon_glow,liquor_worm --rank=2 --panel=aperture|bag|craft|shop|elder|map|help --tab=missions
+##   --sighting=<gu id> [--in=1] (wild Gu sighting next to / around the player)
 ##   --ui_scale=1.35 (preview the phone UI scale)  --shiny=1 (Gu from --give are shiny)
 ##   --tide=1 (Day 5 night, beast tide running) --contrib=N --missions=1 (accept all offered)
 
@@ -76,6 +77,11 @@ func _apply_debug_after(args: Dictionary) -> void:
 	for i in n:
 		var e: Node = world.combat.spawn("wolf", Game.p["pos"] + Vector2.from_angle(i * TAU / n) * 170.0)
 		e.aggro = true
+	if args.has("sighting"):
+		# --sighting=<gu id>: a sighting right next to the player (inside the ring if --in=1)
+		var off := Vector2(0, -30) if args.has("in") else Vector2(160, -60)
+		Game.spawn_sighting(args["sighting"], Game.p["pos"] + off)
+		Game.spawn_sighting() # plus a random rumour elsewhere
 	if args.has("panel") and hud:
 		hud.open_panel(args["panel"], {"shop": args.get("shop", "village"), "tab": args.get("tab", "gu"), "dest": "city", "clan": true})
 	_report = args.has("report")

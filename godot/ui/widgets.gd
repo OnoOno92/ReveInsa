@@ -155,6 +155,14 @@ class MapView extends Control:
 			if labels:
 				draw_string_outline(f, pp + Vector2(-90, -8), poi["name"], HORIZONTAL_ALIGNMENT_CENTER, 180, 12, 3, Color.BLACK)
 				draw_string(f, pp + Vector2(-90, -8), poi["name"], HORIZONTAL_ALIGNMENT_CENTER, 180, 12, col)
+		# wild Gu sightings: pulsing dots in the Gu's path colour
+		var pulse := 0.6 + 0.4 * sin(Time.get_ticks_msec() * 0.006)
+		for sg in Game.sightings:
+			var sp: Vector2 = ((sg["pos"] as Vector2) / WorldData.TILE - region.position) * sc
+			sp = sp.clamp(Vector2(4, 4), size - Vector2(4, 4)) # off-map rumours pin to the edge
+			var sc_col := GuDB.color_of(sg["def"])
+			draw_circle(sp, 6.0 * pulse + 2.0, Color(0, 0, 0, 0.6))
+			draw_circle(sp, 5.0 * pulse + 1.5, sc_col)
 		draw_circle((ppos - region.position) * sc, 3.5, Color.YELLOW)
 		if labels:
 			var wc := Color(0.8, 0.75, 1.0)

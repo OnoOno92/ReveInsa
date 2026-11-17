@@ -56,7 +56,7 @@ explore → gather / hunt → feed Gu, eat → buy / refine Gu → rearrange ape
 - [x] Status effects (burn, stun, soaked/vulnerable) and one Dao combo per path (11), unlocked by 2+ touching same-path pairs. Crit, berserk, lifesteal, damage reduction.
 - [ ] Trigger passives (on kill, on hurt, low HP) and named synergy pairs.
 - [x] Per-drop Gu rolls: potential (power/speed/efficiency/durability), 12 natures, 1/512 shiny, grades F-S, source-based roll ranges, refinement inherits the soul, grade-based sell price.
-- [ ] Wild Gu sightings: timed map markers matched to biome; stand in the zone to capture.
+- [x] Wild Gu sightings: rumours matched to habitat (8 habitats, moon Gu at night), map markers, channel-to-capture with decay, damage interruption, escape roll.
 - [ ] Alchemy furnace and pills; Gu-food garden plots with rot, tending and auto-feed.
 - [ ] Breakthrough tribulation as a Dao-themed arena boss; qi deviation on failure.
 - [ ] Nemesis: a named demonic rival who grows, roams, ambushes and returns stronger.

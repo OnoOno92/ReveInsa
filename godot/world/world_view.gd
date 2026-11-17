@@ -6,6 +6,7 @@ const PropScript := preload("res://world/props.gd")
 const CombatScript := preload("res://game/combat.gd")
 const FxScript := preload("res://game/fx.gd")
 const PickupsScript := preload("res://game/pickups.gd")
+const SightingLayerScript := preload("res://world/sighting_layer.gd")
 const CHUNK_TILES := 16
 
 var ground: TileMapLayer
@@ -40,6 +41,8 @@ func _ready() -> void:
 	pickups = PickupsScript.new()
 	pickups.view = self
 	add_child(pickups)
+
+	add_child(SightingLayerScript.new())
 
 	entities = Node2D.new()
 	entities.y_sort_enabled = true

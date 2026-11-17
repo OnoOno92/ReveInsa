@@ -14,6 +14,7 @@ var clock_label: Label
 var mission_label: RichTextLabel
 var tide_label: Label
 var skill_bar: Control
+var capture_label: Label
 var zone_label: Label
 var minimap: Widgets.MapView
 var stones_btn: Button
@@ -139,6 +140,16 @@ func _ready() -> void:
 	skill_bar.combat = world.combat if world else null
 	skill_bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	root.add_child(skill_bar)
+	capture_label = Widgets.label("", 15, Color("#ffe9a8"))
+	capture_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	capture_label.add_theme_constant_override("outline_size", 5)
+	capture_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	capture_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	capture_label.offset_left = -200
+	capture_label.offset_right = 200
+	capture_label.offset_top = -100
+	capture_label.offset_bottom = -74
+	root.add_child(capture_label)
 
 	# --- toasts
 	toasts = VBoxContainer.new()
@@ -213,6 +224,9 @@ func _process(delta: float) -> void:
 	zone_label.text = zone_name
 	zone_label.add_theme_color_override("font_color", UITheme.BAD if z == "forbidden" else (UITheme.JADE if z in ["village", "city"] else UITheme.MUTED))
 	stones_btn.text = "%d primeval stones" % p["stones"]
+	var ch := Game.channelling()
+	capture_label.text = "" if ch.is_empty() else "Binding %s... %d%%  (stay in the ring)" % [GuDB.GU[ch["def"]]["name"], roundi(100.0 * ch["progress"] / ch["need"])]
+	minimap.queue_redraw() # sighting markers pulse
 	# beast tide banner
 	if Game.tide_active():
 		tide_label.text = "BEAST TIDE - %d slain" % int(Game.flags.get("tide_kills", 0))
