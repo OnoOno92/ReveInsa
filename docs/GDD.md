@@ -54,13 +54,13 @@ explore → gather / hunt → feed Gu, eat → buy / refine Gu → rearrange ape
 
 ### v0.25 — Gu depth (ideas carried over from Martial Improved; see `docs/LEGACY_MARTIAL_IMPROVED.md`)
 - [x] Status effects (burn, stun, soaked/vulnerable) and one Dao combo per path (11), unlocked by 2+ touching same-path pairs. Crit, berserk, lifesteal, damage reduction.
-- [ ] Trigger passives (on kill, on hurt, low HP) and named synergy pairs.
 - [x] Per-drop Gu rolls: potential (power/speed/efficiency/durability), 12 natures, 1/512 shiny, grades F-S, source-based roll ranges, refinement inherits the soul, grade-based sell price.
 - [x] Wild Gu sightings: rumours matched to habitat (8 habitats, moon Gu at night), map markers, channel-to-capture with decay, damage interruption, escape roll.
 - [x] Alchemy furnace (buildable, permanent; settlements have one) and 8 pills: heal, essence, feed-all-Gu, armor/speed/damage/night-sight buffs, breakthrough aid. Alchemy mastery (success + double brew).
 - [x] Spirit field plots (buildable; two in Shi Lan Village): moon orchid, herb, berries, spirit rice; growth stages, night/water bonuses, tending for quality, rot, beast-tide trampling, growth during rest/travel. Harvest feeds Gu via the bag.
 - [x] Breakthrough tribulations: Peak Stage gates the next rank; Dao-themed arena storm (11 themes) with telegraphed strikes, spirits and a Calamity Avatar; flawless bonus; qi deviation on failure (no death penalty); Tribulation Ward Pill. Balanced with a headless autopilot sim (`--trib=1 --autopilot=1 --time_scale=4`).
-- [ ] Nemesis: a named demonic rival who grows, roams, ambushes and returns stronger.
+- [x] Nemesis: a named demonic Gu Master (generated per world, 8 Dao paths) who emerges on Day 2, grows daily (up to your rank +1), roams, holds a grudge (emerging / rival burns fields / threat hunts you), confronts you with followers, may flee with a Blood Escape Gu below 25% HP, drops his Gu and a Demon Core, and returns 25% stronger after 4 days. Map marker + rival card.
+- [ ] Trigger passives (on kill, on hurt, low HP) and named synergy pairs.
 
 ### v0.3 — Living world
 - Roaming NPC Gu Masters on one unified NPC schema (clan guards are NPCs too), with a world event log.

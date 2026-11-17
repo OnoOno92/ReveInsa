@@ -3,6 +3,7 @@ extends Node
 ## Debug/screenshot args (via tools/godot.sh shot ... -- --autostart=1 ...):
 ##   --autostart=1 --seed=N --night=1 --at=ruins|city|forbidden|wild --enemies=N
 ##   --give=moon_glow,liquor_worm --rank=2 --panel=aperture|bag|craft|shop|elder|map|help --tab=missions
+##   --nemesis=1 [--grudge=80] [--far=1] (the nemesis confronts you / is roaming far away)
 ##   --trib=1 [--trib_t=45] [--autopilot=1 --time_scale=4 --quit_after=40] (balance sims, run headless)
 ##   --trib=1 [--trib_t=45] (start the breakthrough tribulation, optionally fast-forwarded)
 ##   --garden=1 (spirit fields at different growth stages)
@@ -111,6 +112,13 @@ func _apply_debug_after(args: Dictionary) -> void:
 		var off := Vector2(0, -30) if args.has("in") else Vector2(160, -60)
 		Game.spawn_sighting(args["sighting"], Game.p["pos"] + off)
 		Game.spawn_sighting() # plus a random rumour elsewhere
+	if args.has("nemesis"):
+		# --nemesis=1: the nemesis emerges, hunting you, and is about to step out of the trees
+		if Game.nemesis.is_empty():
+			Game.nemesis = Nemesis.create(Game.world.seed_value, Game.p["rank"], WorldData.poi_center("ruins"))
+		Game.nemesis["grudge"] = float(args.get("grudge", "80"))
+		Game.nemesis["last_seen"] = Game.p["pos"] + Vector2(900, -300)
+		Game.nemesis["pos"] = Game.p["pos"] + Vector2(260, 0) if not args.has("far") else Game.p["pos"] + Vector2(2600, -900)
 	if args.has("trib"):
 		# --trib=1 [--trib_t=seconds]: Peak Stage, start the tribulation (optionally fast-forwarded)
 		Game.p["stage"] = 3
@@ -145,3 +153,5 @@ func _exit_tree() -> void:
 	if _report and not Game.p.is_empty():
 		print("report: hp=%.0f/%.0f essence=%.0f kills=%d stones=%d zone=%s" % [
 			Game.p["hp"], Game.max_hp(), Game.p["essence"], Game.p["kills"], Game.p["stones"], Game.world.zone_at(Game.p["pos"])])
+		if not Game.nemesis.is_empty():
+			print("report: nemesis alive=%s present=%s defeats=%d escapes=%d" % [Game.nemesis["alive"], Game.nemesis_present, Game.nemesis["defeats"], Game.nemesis["escapes"]])

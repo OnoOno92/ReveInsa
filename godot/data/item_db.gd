@@ -18,6 +18,7 @@ const ITEMS := {
 	"bone": {"name": "Beast Bone", "desc": "Material for Gu refinement.", "color": "#e8e2d0", "price": 3},
 	"jade_shard": {"name": "Jade Shard", "desc": "Rare mineral used to refine White Jade Gu.", "color": "#a8e6cf", "price": 12},
 	"thunder_crystal": {"name": "Thunder Crystal", "desc": "Crackles with stored lightning.", "color": "#d1b3ff", "price": 10},
+	"demon_core": {"name": "Demon Core", "desc": "The crystallised malice of a demonic Gu Master. Merchants pay well for it.", "color": "#ff4d6d", "price": 60},
 	"beast_core": {"name": "Beast King Core", "desc": "The condensed will of a beast king.", "color": "#ffcc33", "price": 80},
 	# ---------------- Pills (brewed at an alchemy furnace) ----------------
 	# pill.instant: hp / essence (fractions of max), feed_all_gu; pill.buff: stat bonuses for `seconds`

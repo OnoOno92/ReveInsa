@@ -11,10 +11,53 @@ var timers := {}
 var spawn_t := 0.0
 var ally_respawn := {} # summon key -> seconds until a fallen beast returns
 var _guards_posted := false
+var nemesis_actor: Node = null
 
 
 func enemies() -> Array:
 	return get_tree().get_nodes_in_group("enemies")
+
+
+func _ready() -> void:
+	Game.nemesis_engage.connect(_on_nemesis_engage)
+
+
+## The nemesis steps out of the wilds with two followers.
+func _on_nemesis_engage(n: Dictionary) -> void:
+	var ppos: Vector2 = Game.p["pos"]
+	var from: Vector2 = (n["pos"] - ppos).normalized() if n["pos"] != ppos else Vector2.RIGHT
+	var at := ppos + from * 380.0
+	for attempt in 8:
+		if not Game.world.is_solid_pos(at) and not Game.world.is_safe(at):
+			break
+		at = ppos + from.rotated(attempt * 0.8) * 380.0
+	var st := Nemesis.combat_stats(n)
+	var e: Node = spawn("nemesis", at)
+	e.max_hp = st["hp"]
+	e.hp = e.max_hp
+	e.dmg_scale = st["dmg_scale"]
+	e.tint = Nemesis.path_color(n).darkened(0.35)
+	e.display_name = n["name"]
+	e.aggro = true
+	nemesis_actor = e
+	for i in 2:
+		var m: Node = spawn("demonic_master", at + Vector2.from_angle(i * PI + 0.6) * 50.0)
+		m.aggro = true
+	view.fx.add("ring", at, Color("#ff4d6d"), 1.0, {"r": 90.0})
+
+
+func _update_nemesis_actor() -> void:
+	if not Game.nemesis_present:
+		return
+	if not is_instance_valid(nemesis_actor) or nemesis_actor.is_queued_for_deletion():
+		Game.nemesis_lost_trail(Game.nemesis["pos"]) # removed some other way (travel, tribulation): he stays where he was
+		nemesis_actor = null
+		return
+	Game.nemesis["pos"] = nemesis_actor.position
+	if nemesis_actor.position.distance_to(Game.p["pos"]) > 1400.0:
+		Game.nemesis_lost_trail(nemesis_actor.position)
+		nemesis_actor.queue_free()
+		nemesis_actor = null
 
 
 func clear_enemies(keep_boss := true) -> void:
@@ -54,6 +97,7 @@ func _on_enemy_fired(from: Vector2, dir: Vector2, spec: Dictionary) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_update_nemesis_actor()
 	_update_spawns(delta)
 	_update_allies(delta)
 	_update_heals(delta)
@@ -70,7 +114,7 @@ func _physics_process(delta: float) -> void:
 func _update_spawns(delta: float) -> void:
 	var ppos: Vector2 = Game.p["pos"]
 	for e in enemies():
-		if not e.is_boss() and e.position.distance_to(ppos) > 1500.0:
+		if not e.is_boss() and e != nemesis_actor and e.position.distance_to(ppos) > 1500.0:
 			e.queue_free()
 	spawn_t -= delta
 	if spawn_t > 0.0 or Game.in_tribulation:
@@ -300,6 +344,15 @@ func _hit(e: Node, dmg: float, src: Dictionary) -> void:
 		e.apply_vulnerable(src["vulnerable"])
 	if from_player and Game.stat("lifesteal") > 0.0:
 		Game.p["hp"] = minf(Game.max_hp(), Game.p["hp"] + dealt * Game.stat("lifesteal"))
+	if e == nemesis_actor and e.hp > 0.0 and e.hp < e.max_hp * 0.25 and not e.has_meta("escape_rolled"):
+		e.set_meta("escape_rolled", true)
+		if randf() < 0.5:
+			view.fx.add("ring", e.position, Color("#ff1a4a"), 0.8, {"r": 70.0})
+			view.fx.add("burst", e.position, Color("#ff1a4a"), 0.6)
+			Game.nemesis_escaped(e.position)
+			nemesis_actor = null
+			e.queue_free()
+			return
 	var txt := str(roundi(dealt)) + ("!" if crit else "")
 	view.fx.text(e.position + Vector2(randf_range(-8, 8), -e.radius - 6), txt, Color("#ffd76b") if crit else Color.WHITE, 0.6)
 
@@ -350,6 +403,9 @@ func _kill(e: Node) -> void:
 			Game.toast.emit("You captured a wild %s! (%s)" % [GuDB.GU[g]["name"], GuRoll.summary(caught)], "gold")
 	Game.p["kills"] += 1
 	Game.on_enemy_killed(e.id, e.raider)
+	if e == nemesis_actor:
+		nemesis_actor = null
+		Game.nemesis_defeated()
 	view.fx.add("burst", e.position, Color.html(d["color"]), 0.5)
 	if e.is_boss():
 		Game.flags["bear_king_died"] = maxi(1, Game.day())

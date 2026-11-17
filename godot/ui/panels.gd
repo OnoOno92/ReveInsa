@@ -447,6 +447,29 @@ func _map(box: VBoxContainer) -> void:
 	m.refresh()
 	box.add_child(m)
 	box.add_child(Widgets.label("Unexplored land stays dark. Regional Walls (violet) seal the Southern Border from the other regions.", 13, UITheme.MUTED))
+	var n: Dictionary = Game.nemesis
+	if not n.is_empty():
+		box.add_child(Widgets.header("Nemesis"))
+		var pc := PanelContainer.new()
+		pc.add_theme_stylebox_override("panel", UITheme.box(Color(0.35, 0.05, 0.1, 0.25), Color("#ff4d6d"), 10, 1, 10))
+		var v := VBoxContainer.new()
+		pc.add_child(v)
+		var status: String
+		if not n["alive"]:
+			status = "[color=#7cfc8a]Defeated[/color] - he will return in about %d hours." % ceili((n["respawn_day"] - Game.time) * 24.0)
+		else:
+			var phase := Nemesis.phase(n)
+			status = {"emerging": "[color=#ffd76b]Watching you[/color] - he keeps his distance, for now.",
+				"rival": "[color=#ffb347]Rival[/color] - he raids your fields at night.",
+				"threat": "[color=#ff6b6b]Hunting you[/color] - he will come for you."}[phase]
+		v.add_child(Widgets.rich("[b][color=#ff8aa0]%s[/color][/b]\n%s Gu Master, Rank %d  -  %s path  -  defeated %d, escaped %d\n%s\nLast seen %s (red diamond on the map)." % [
+			Nemesis.full_name(n), "Demonic", n["rank"], GuDB.PATH_NAMES[n["path"]].trim_suffix(" Path"), n["defeats"], n["escapes"],
+			status, Sightings.direction_text(Game.p["pos"], n["last_seen"])], 13))
+		var bar := Widgets.StatBar.new(Color("#c0392b"))
+		bar.custom_minimum_size = Vector2(300, 18)
+		bar.set_values(n["grudge"], 100.0, "Grudge %d / 100" % roundi(n["grudge"]))
+		v.add_child(bar)
+		box.add_child(pc)
 
 
 func _plot(box: VBoxContainer, args: Dictionary) -> void:
@@ -485,6 +508,7 @@ func _help(box: VBoxContainer) -> void:
 		"[b]Feeding[/b]: every Gu eats a specific food every few days at dawn. Hungry Gu stop working; 3 days later they die.",
 		"[b]Survival[/b]: watch Hunger. Night is dark and dangerous; build a campfire (Refine panel) and cook meat.",
 		"[b]Primeval stones[/b] are money and essence. Tap Absorb or press Q to restore essence mid-fight.",
+		"[b]Nemesis[/b]: a demonic Gu Master takes an interest in you on Day 2. His grudge grows each day, when you kill demonic cultivators, and if you claim the inheritance. A rival burns your fields; a hunter comes for you. Beaten, he may flee with a Blood Escape Gu, and he always returns stronger. Check the map for his last known position.",
 		"[b]Tribulations[/b]: when Peak Stage is full, face a tribulation from the Clan Elder. Dodge Heaven's strikes and destroy the Calamity Avatar to break through. Failing causes a day of qi deviation.",
 		"[b]Cultivate[/b] with the Clan Elder to rank up. Use the caravan to reach Shang Clan City for rarer Gu.",
 		"[b]Clan missions[/b]: the village elder posts hunts, deliveries and scouting jobs. They pay stones and [b]clan contribution[/b], which buys rare Gu and pills in the Clan Treasury.",

@@ -12,6 +12,7 @@ signal new_day(day: int)
 signal sighting_resolved(sighting: Dictionary, caught: bool)
 signal plot_interact(plot: Dictionary)
 signal tribulation_started(theme: Dictionary, arena: Vector2)
+signal nemesis_engage(nemesis: Dictionary)
 signal tribulation_ended(success: bool)
 
 var save_path := "user://save_v1.json"
@@ -27,6 +28,9 @@ var campfires: Array = [] # {pos: Vector2, until: float}
 ## Spirit field plots: {id, pos: Vector2, crop: String ("" = empty), growth: 0..1, ripe_age: days,
 ## quality: 0..3, tend_ready: time (days) when it can be tended again}
 var plots: Array = []
+## The nemesis (see game/nemesis.gd); empty until he emerges.
+var nemesis: Dictionary = {}
+var nemesis_present := false # his actor is in the world right now
 ## Wild Gu sightings, see game/sightings.gd: {id, def, pos: Vector2, until, progress, need}
 var sightings: Array = []
 var _sight_t := 12.0 # first rumour comes early
@@ -76,6 +80,8 @@ func new_game(player_name: String, world_seed := -1) -> Dictionary:
 	campfires = []
 	sightings = []
 	_sight_t = 12.0
+	nemesis = {}
+	nemesis_present = false
 	plots = []
 	# Shi Lan Village keeps two fields behind the elder's house for you
 	var vc := WorldData.poi_center("village")
@@ -108,6 +114,7 @@ func save_game() -> void:
 	var data := {
 		"v": 1, "seed": world.seed_value, "time": time, "player": pd, "flags": flags,
 		"depleted": depleted, "campfires": fires, "explored": Marshalls.raw_to_base64(world.explored),
+		"nemesis": _nemesis_to_save(),
 		"plots": plots.map(func(pl):
 			var c: Dictionary = pl.duplicate()
 			c["pos"] = [pl["pos"].x, pl["pos"].y]
@@ -168,6 +175,8 @@ func load_game() -> bool:
 		var n = by_id.get(int(d[0]))
 		if n:
 			n["regrow_day"] = float(d[1]); n["hp"] = int(d[2])
+	nemesis = _nemesis_from_save(data.get("nemesis", {}))
+	nemesis_present = false
 	plots = []
 	if not data.has("plots"): # saves from before spirit fields: grant the village fields
 		var vc := WorldData.poi_center("village")
@@ -735,6 +744,7 @@ func _on_new_day() -> void:
 			elif inst["unfed"] > every:
 				lines.append("%s is starving (needs %s)." % [d["name"], ItemDB.ITEMS[d["food"]]["name"]])
 	_tide_reward()
+	_nemesis_new_day()
 	refill_missions()
 	rebuild()
 	toast.emit("Day %d dawns." % (day() + 1), "gold")
@@ -803,6 +813,8 @@ func on_enemy_killed(enemy_id: String, was_raider: bool) -> void:
 				toast.emit("Mission ready to report: %s." % q["title"], "good")
 	if was_raider:
 		flags["tide_kills"] = int(flags.get("tide_kills", 0)) + 1
+	if enemy_id == "demonic_master" and not nemesis.is_empty():
+		Nemesis.add_grudge(nemesis, 8.0) # you are killing his followers
 
 func _track_explore() -> void:
 	var z := world.zone_at(p["pos"])
@@ -907,6 +919,7 @@ func tick(delta: float) -> void:
 	grow_plots(delta / DAY_SECONDS)
 	_expire_buffs()
 	_update_sightings(delta)
+	_update_nemesis(delta)
 	if p["hp"] <= 0.0:
 		die("You starved.")
 
@@ -1016,6 +1029,133 @@ func _trample_fields() -> void:
 			_clear_plot(pl)
 
 
+# ------------------------------------------------------------------ nemesis
+func _nemesis_to_save() -> Dictionary:
+	if nemesis.is_empty():
+		return {}
+	var c := nemesis.duplicate(true)
+	for k in ["pos", "target", "last_seen"]:
+		c[k] = [nemesis[k].x, nemesis[k].y]
+	return c
+
+func _nemesis_from_save(d: Dictionary) -> Dictionary:
+	if d.is_empty():
+		return {}
+	var n := d.duplicate(true)
+	for k in ["pos", "target", "last_seen"]:
+		n[k] = Vector2(d[k][0], d[k][1])
+	for k in ["rank", "defeats", "escapes"]:
+		n[k] = int(n[k])
+	for k in ["power", "grudge", "respawn_day", "cooldown_until"]:
+		n[k] = float(n[k])
+	n["alive"] = bool(n["alive"])
+	return n
+
+func _nemesis_new_day() -> void:
+	if nemesis.is_empty():
+		if day() >= Nemesis.EMERGE_DAY:
+			nemesis = Nemesis.create(world.seed_value, p["rank"], WorldData.poi_center("ruins"))
+			toast.emit("Word spreads of your awakening. A demonic Gu Master, %s, has taken notice - he too hunts the Nameless Inheritance." % Nemesis.full_name(nemesis), "bad")
+		return
+	if not nemesis["alive"]:
+		if time >= nemesis["respawn_day"]:
+			nemesis["alive"] = true
+			nemesis["power"] *= 1.25
+			Nemesis.sync_rank(nemesis, p["rank"])
+			nemesis["grudge"] = maxf(nemesis["grudge"], 75.0)
+			nemesis["pos"] = WorldData.poi_center("forbidden")
+			nemesis["target"] = nemesis["pos"]
+			toast.emit("%s has returned from the brink, stronger, and he wants vengeance." % nemesis["name"], "bad")
+		return
+	Nemesis.grow(nemesis, p["rank"])
+	Nemesis.add_grudge(nemesis, 6.0)
+	nemesis["last_seen"] = nemesis["pos"]
+	toast.emit("Rumour: %s was seen %s." % [nemesis["name"], Sightings.direction_text(p["pos"], nemesis["pos"])], "info")
+	# Rivals and threats raid your fields at night
+	if Nemesis.phase(nemesis) != "emerging" and rng.randf() < 0.35:
+		var planted := plots.filter(func(pl): return pl["crop"] != "")
+		if planted.size():
+			var pl: Dictionary = planted[rng.randi() % planted.size()]
+			toast.emit("In the night, %s burned your %s field." % [nemesis["name"], ItemDB.ITEMS[pl["crop"]]["name"]], "bad")
+			_clear_plot(pl)
+
+## Where he wants to go next: home turf while watching, closer to you as the grudge grows.
+func _nemesis_pick_target() -> Vector2:
+	var phase := Nemesis.phase(nemesis)
+	if phase == "emerging" and rng.randf() < 0.6:
+		return WorldData.poi_center("ruins" if rng.randf() < 0.5 else "forbidden")
+	for attempt in 12:
+		var c: Vector2 = p["pos"] + Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(10.0, 40.0) * WorldData.TILE
+		if WorldData.in_bounds(WorldData.to_tile(c)) and not world.is_solid_pos(c) and not world.is_safe(c):
+			return c
+	return WorldData.poi_center("ruins")
+
+func _update_nemesis(delta: float) -> void:
+	if nemesis.is_empty() or not nemesis["alive"] or nemesis_present:
+		return
+	var phase := Nemesis.phase(nemesis)
+	var hunting := phase == "threat"
+	var goal: Vector2 = p["pos"] if hunting else nemesis["target"]
+	var speed: float = (Nemesis.HUNT_TILES_PER_DAY if hunting else Nemesis.ROAM_TILES_PER_DAY) * WorldData.TILE / DAY_SECONDS
+	var to: Vector2 = goal - nemesis["pos"]
+	if to.length() <= speed * delta:
+		nemesis["pos"] = goal
+		if not hunting:
+			nemesis["target"] = _nemesis_pick_target()
+	else:
+		nemesis["pos"] += to.normalized() * speed * delta
+	# Confrontation
+	if in_tribulation or world.is_safe(p["pos"]) or time < nemesis["cooldown_until"]:
+		return
+	var reach := Nemesis.ENGAGE_TILES * (0.45 if phase == "emerging" else 1.0) * WorldData.TILE
+	if (nemesis["pos"] as Vector2).distance_to(p["pos"]) < reach:
+		nemesis_present = true
+		nemesis["last_seen"] = nemesis["pos"]
+		var lines := {"emerging": "So you are the one the clan whispers about. Show me your Gu.",
+			"rival": "Your fields burned nicely. Now it is your turn.",
+			"threat": "I have hunted you long enough. Die!"}
+		toast.emit("%s: \"%s\"" % [nemesis["name"], lines[phase]], "bad")
+		nemesis_engage.emit(nemesis)
+
+func nemesis_defeated() -> void:
+	nemesis_present = false
+	nemesis["alive"] = false
+	nemesis["defeats"] += 1
+	nemesis["respawn_day"] = time + Nemesis.RESPAWN_DAYS
+	nemesis["grudge"] = 40.0
+	var stones: int = roundi(60.0 * nemesis["rank"] * nemesis["power"])
+	p["stones"] += stones
+	add_item("demon_core", 1)
+	var pool: Array = nemesis["gu"].filter(func(g): return GuDB.GU[g]["rank"] <= p["rank"] + 1)
+	var prize := ""
+	if pool.size():
+		prize = pool[rng.randi() % pool.size()]
+		var got := add_gu(prize, false, "inherit")
+		prize = "%s (%s)" % [GuDB.GU[prize]["name"], GuRoll.summary(got)]
+	toast.emit("%s falls! +%d stones, a Demon Core%s. But demonic cultivators rarely stay dead..." % [nemesis["name"], stones, (" and his " + prize) if prize != "" else ""], "gold")
+	changed.emit(); save_game()
+
+func nemesis_escaped(at: Vector2) -> void:
+	nemesis_present = false
+	nemesis["escapes"] += 1
+	nemesis["power"] *= 1.08
+	Nemesis.add_grudge(nemesis, 15.0)
+	nemesis["cooldown_until"] = time + 0.4
+	nemesis["pos"] = WorldData.poi_center("ruins")
+	nemesis["last_seen"] = at
+	toast.emit("%s spits blood and vanishes in a crimson flash - a Blood Escape Gu! He will remember this." % nemesis["name"], "bad")
+	changed.emit()
+
+## You outran him.
+func nemesis_lost_trail(at: Vector2) -> void:
+	nemesis_present = false
+	nemesis["pos"] = at
+	nemesis["last_seen"] = at
+	nemesis["cooldown_until"] = time + 0.15
+	Nemesis.add_grudge(nemesis, 5.0)
+	toast.emit("%s loses your trail... for now." % nemesis["name"], "info")
+
+
 # ------------------------------------------------------------------ wild Gu sightings
 ## The sighting the player is currently channelling (empty if none).
 func channelling() -> Dictionary:
@@ -1103,6 +1243,11 @@ func hurt_player(dmg: float, source: String) -> void:
 		die("You were slain by a %s." % source)
 
 func die(reason: String) -> void:
+	if nemesis_present:
+		nemesis_present = false
+		nemesis["cooldown_until"] = time + 0.5
+		Nemesis.add_grudge(nemesis, -15.0) # satisfied, for a while
+		reason += " %s laughs as you fall." % nemesis["name"]
 	if in_tribulation:
 		p["hp"] = 1.0
 		end_tribulation(false, "You collapse under Heaven's wrath.")
@@ -1131,6 +1276,9 @@ func die(reason: String) -> void:
 
 func loot_inheritance() -> String:
 	flags["ruins_looted"] = true
+	if not nemesis.is_empty():
+		Nemesis.add_grudge(nemesis, 30.0)
+		toast.emit("Somewhere, %s howls in fury - the inheritance he sought is yours." % nemesis["name"], "bad")
 	p["stones"] += 150
 	var pool := ["moon_glow", "thunder_bead", "four_flavors", "fire_ember"]
 	var g: String = pool[rng.randi() % pool.size()]

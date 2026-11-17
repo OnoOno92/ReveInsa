@@ -163,6 +163,15 @@ class MapView extends Control:
 			var sc_col := GuDB.color_of(sg["def"])
 			draw_circle(sp, 6.0 * pulse + 2.0, Color(0, 0, 0, 0.6))
 			draw_circle(sp, 5.0 * pulse + 1.5, sc_col)
+		# the nemesis: a red diamond where he was last seen (live while he hunts you)
+		var nem: Dictionary = Game.nemesis
+		if not nem.is_empty() and nem["alive"]:
+			var at: Vector2 = nem["pos"] if Game.nemesis_present else nem["last_seen"]
+			var np: Vector2 = (at / WorldData.TILE - region.position) * sc
+			np = np.clamp(Vector2(5, 5), size - Vector2(5, 5))
+			var d := 5.0 + 1.5 * pulse
+			draw_colored_polygon(PackedVector2Array([np + Vector2(0, -d - 1), np + Vector2(d + 1, 0), np + Vector2(0, d + 1), np + Vector2(-d - 1, 0)]), Color(0, 0, 0, 0.7))
+			draw_colored_polygon(PackedVector2Array([np + Vector2(0, -d), np + Vector2(d, 0), np + Vector2(0, d), np + Vector2(-d, 0)]), Color("#ff4d6d"))
 		draw_circle((ppos - region.position) * sc, 3.5, Color.YELLOW)
 		if labels:
 			var wc := Color(0.8, 0.75, 1.0)

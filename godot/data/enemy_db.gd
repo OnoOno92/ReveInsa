@@ -37,6 +37,12 @@ const ENEMIES := {
 		"drops": [{"item": "herb", "chance": 0.8, "min": 1, "max": 3}, {"item": "bone", "chance": 0.5, "min": 1, "max": 2}],
 		"ranged": {"range": 180.0, "speed": 220.0, "damage": 12.0, "cd": 2.8, "color": "#9cff57"},
 	},
+	# The nemesis (stats scaled from Game.nemesis by combat.gd)
+	"nemesis": {
+		"name": "Nemesis", "faction": "demonic", "hp": 200.0, "speed": 105.0, "damage": 12.0, "attack_cd": 1.1, "radius": 15.0,
+		"color": "#3a0f24", "aggro": 1200.0, "stones": [0, 0], "drops": [], "elite": true,
+		"ranged": {"range": 290.0, "speed": 380.0, "damage": 11.0, "cd": 1.25, "color": "#ff4d6d"},
+	},
 	# Tribulation foes (stats are scaled by the tribulation controller; "elite" shows a named HP bar)
 	"trib_spirit": {
 		"name": "Tribulation Spirit", "faction": "beast", "hp": 40.0, "speed": 110.0, "damage": 8.0, "attack_cd": 1.0, "radius": 11.0,
