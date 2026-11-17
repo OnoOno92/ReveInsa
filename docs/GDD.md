@@ -46,7 +46,7 @@ explore → gather / hunt → feed Gu, eat → buy / refine Gu → rearrange ape
 - [x] Clan missions from the village elder (hunt / deliver / scout), clan contribution as a second currency, and a Clan Treasury (rare Gu, aptitude pill).
 - [x] Beast tides: every 5th night, raiders storm Shi Lan Village; clan guards defend; rewards at dawn.
 - [x] Enslavement path: Wolf Enslavement Gu summons a wolf companion; enemies target allies too.
-- [x] +8 Gu (now 25) and +3 killer moves (now 8): Steam Burst, Wolf Pack Command, Thorned Gale; knockback on Gust Gu.
+- [x] +7 Gu (now 24) and +3 killer moves (now 8): Steam Burst, Wolf Pack Command, Thorned Gale; knockback on Gust Gu.
 - [ ] More Gu (~40 rank 1–3) across all paths; more enslaved beasts (boar, thunder wolf).
 - [ ] Gu durability and "using a higher-rank Gu costs extra essence", instead of the current hard lock.
 - [ ] Buildable shelters, storage chests, and Gu-food gardens (moon orchid beds, wine brewing).
