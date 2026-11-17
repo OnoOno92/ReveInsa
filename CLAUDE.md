@@ -3,7 +3,9 @@
 A fan survival game set in the *Reverend Insanity* world, with an original story (not Fang Yuan's). Design and roadmap: `docs/GDD.md`.
 
 ## Layout
-- `godot/` — **the real game** (Godot 4.7.2, GDScript). All new work goes here.
+- `godot/` — **the real game** (Godot 4.7.2, GDScript). All new work goes here. The port from the web prototype is complete: world gen, aperture/synergies/killer moves, auto-combat, survival, feeding, crafting/refinement, shops, cultivation, caravans, saves, HUD + panels, touch stick.
+  - Rules/state: `game/game.gd` (autoload `Game`). Pure logic: `game/aperture.gd`, `world/world_data.gd`. Data: `data/*.gd`.
+  - Debug args for screenshots are documented at the top of `scenes/main.gd` (`--autostart=1 --at=wild --enemies=4 --panel=aperture --report=1 ...`).
 - `src/`, `index.html` — the first web prototype (TypeScript + Vite). It's the reference for porting: data in `src/data/`, aperture rules in `src/game/aperture.ts`. Don't extend it.
 - `tools/` — `setup_godot.sh` (installs pinned Godot), `godot.sh` (check / test / shot).
 

@@ -1,0 +1,164 @@
+class_name Widgets
+extends RefCounted
+## Small UI building helpers + custom-drawn widgets (stat bar, minimap, Gu shape icon).
+
+
+static func label(text: String, size := 15, color := UITheme.PAPER) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", color)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return l
+
+
+static func rich(bbcode: String, size := 14) -> RichTextLabel:
+	var r := RichTextLabel.new()
+	r.bbcode_enabled = true
+	r.fit_content = true
+	r.scroll_active = false
+	r.text = bbcode
+	r.add_theme_font_size_override("normal_font_size", size)
+	r.add_theme_font_size_override("bold_font_size", size)
+	r.mouse_filter = Control.MOUSE_FILTER_PASS
+	return r
+
+
+static func button(text: String, cb: Callable, enabled := true, gold := false, size := 14) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.disabled = not enabled
+	b.add_theme_font_size_override("font_size", size)
+	b.pressed.connect(cb)
+	if gold and enabled:
+		UITheme.gold_button(b)
+	return b
+
+
+static func row(children: Array, sep := 8) -> HBoxContainer:
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", sep)
+	for c in children:
+		h.add_child(c)
+	return h
+
+
+static func header(text: String) -> Label:
+	var l := label(text, 16, UITheme.GOLD)
+	return l
+
+
+static func hex(c: Color) -> String:
+	return "#" + c.to_html(false)
+
+
+## A horizontal stat bar with text.
+class StatBar extends Control:
+	var value := 1.0
+	var max_value := 1.0
+	var overlay := 0.0 # e.g. shield, drawn on top
+	var color := Color.RED
+	var text := ""
+
+	func _init(c: Color) -> void:
+		color = c
+		custom_minimum_size = Vector2(250, 17)
+		mouse_filter = MOUSE_FILTER_IGNORE
+
+	func set_values(v: float, m: float, t: String, ov := 0.0) -> void:
+		value = v; max_value = maxf(m, 0.001); text = t; overlay = ov
+		queue_redraw()
+
+	func _draw() -> void:
+		var r := Rect2(Vector2.ZERO, size)
+		draw_rect(r, Color(0, 0, 0, 0.55))
+		draw_rect(Rect2(Vector2.ZERO, Vector2(size.x * clampf(value / max_value, 0, 1), size.y)), color)
+		if overlay > 0.0:
+			draw_rect(Rect2(Vector2.ZERO, Vector2(size.x * clampf(overlay / max_value, 0, 1), size.y)), Color(0.43, 0.75, 1.0, 0.55))
+		draw_rect(r, Color(1, 1, 1, 0.15), false, 1.0)
+		var f := ThemeDB.fallback_font
+		draw_string_outline(f, Vector2(6, size.y - 4), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 3, Color(0, 0, 0, 0.8))
+		draw_string(f, Vector2(6, size.y - 4), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)
+
+
+## Tiny drawing of a Gu's shape in its path colour.
+class GuIcon extends Control:
+	var def_id := ""
+	var rot := 0
+	const C := 9.0
+
+	func _init(id: String, r := 0) -> void:
+		def_id = id
+		rot = r
+		var cells := Aperture.shape_cells(def_id, rot)
+		var w := 0
+		var h := 0
+		for c in cells:
+			w = maxi(w, c.x + 1); h = maxi(h, c.y + 1)
+		custom_minimum_size = Vector2(w * C, h * C)
+		mouse_filter = MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		for c in Aperture.shape_cells(def_id, rot):
+			draw_rect(Rect2(c.x * C, c.y * C, C - 1, C - 1), GuDB.color_of(def_id))
+
+
+## Minimap / world map with fog of war.
+class MapView extends Control:
+	var span := 70.0 # tiles shown; <= 0 means whole map
+	var tex: ImageTexture
+	var base: Image
+	var labels := false
+
+	func _init(tiles_shown: float, show_labels := false) -> void:
+		span = tiles_shown
+		labels = show_labels
+
+	func refresh() -> void:
+		var w := Game.world
+		if base == null:
+			base = Image.create(WorldData.W, WorldData.H, false, Image.FORMAT_RGB8)
+		var fog := Color(0.055, 0.055, 0.086)
+		for y in WorldData.H:
+			for x in WorldData.W:
+				var i := y * WorldData.W + x
+				base.set_pixel(x, y, Color.html(WorldData.TILE_COLORS[w.tiles[i]]) if w.explored[i] else fog)
+		if tex == null:
+			tex = ImageTexture.create_from_image(base)
+		else:
+			tex.update(base)
+		queue_redraw()
+
+	func _draw() -> void:
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.055, 0.055, 0.086))
+		if tex == null:
+			return
+		var ppos: Vector2 = Game.p["pos"] / WorldData.TILE
+		var region: Rect2
+		if span > 0.0:
+			region = Rect2(ppos - Vector2(span, span) / 2.0, Vector2(span, span))
+		else:
+			region = Rect2(0, 0, WorldData.W, WorldData.H)
+		var clipped := region.intersection(Rect2(0, 0, WorldData.W, WorldData.H))
+		var sc := size / region.size
+		if clipped.has_area():
+			draw_texture_rect_region(tex, Rect2((clipped.position - region.position) * sc, clipped.size * sc), clipped)
+		var f := ThemeDB.fallback_font
+		for poi in WorldData.POIS:
+			if not Game.world.explored[poi["ty"] * WorldData.W + poi["tx"]]:
+				continue
+			var pp := (Vector2(poi["tx"], poi["ty"]) - region.position) * sc
+			if not Rect2(Vector2.ZERO, size).has_point(pp):
+				continue
+			var col := Color("#ff4d6d") if poi["id"] == "forbidden" else (Color("#ffd76b") if poi["id"] == "ruins" else Color.WHITE)
+			draw_rect(Rect2(pp - Vector2(3, 3), Vector2(6, 6)), col)
+			if labels:
+				draw_string_outline(f, pp + Vector2(-90, -8), poi["name"], HORIZONTAL_ALIGNMENT_CENTER, 180, 12, 3, Color.BLACK)
+				draw_string(f, pp + Vector2(-90, -8), poi["name"], HORIZONTAL_ALIGNMENT_CENTER, 180, 12, col)
+		draw_circle((ppos - region.position) * sc, 3.5, Color.YELLOW)
+		if labels:
+			var wc := Color(0.8, 0.75, 1.0)
+			draw_string(f, Vector2(0, 14), "Central Continent", HORIZONTAL_ALIGNMENT_CENTER, size.x, 12, wc)
+			draw_string(f, Vector2(4, size.y / 2), "Western Desert", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, wc)
+			draw_string(f, Vector2(0, size.y / 2), "Eastern Sea", HORIZONTAL_ALIGNMENT_RIGHT, size.x - 4, 11, wc)
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.83, 0.66, 0.23, 0.5), false, 1.0)
