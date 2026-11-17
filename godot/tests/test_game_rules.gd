@@ -17,12 +17,13 @@ func test_new_game_starts_with_two_placed_gu() -> void:
 func test_gu_eats_at_dawn_and_starves_without_food() -> void:
 	var g = _game()
 	g.p["inventory"] = {} # no food at all
-	g.advance_time(4.0)
-	var moon = g.p["gu"].filter(func(x): return x["def"] == "moonlight")
-	assert_eq(moon.size(), 1, "still alive after 4 days (feeds every 3, dies at 6)")
-	assert_true(Aperture.is_starving(moon[0]), "but starving")
-	g.advance_time(3.0)
-	assert_eq(g.p["gu"].filter(func(x): return x["def"] == "moonlight").size(), 0, "dead after feed_every + 3 days")
+	var moon: Dictionary = g.p["gu"].filter(func(x): return x["def"] == "moonlight")[0]
+	var every := GuRoll.feed_every(moon) # 3 days, more with high durability / a hardy nature
+	g.advance_time(every + 1)
+	assert_true(g.p["gu"].has(moon), "still alive at day %d" % (every + 1))
+	assert_true(Aperture.is_starving(moon), "but starving")
+	g.advance_time(2.0)
+	assert_false(g.p["gu"].has(moon), "dead after feed interval + 3 days")
 	g.free()
 
 func test_gu_fed_from_inventory() -> void:
