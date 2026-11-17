@@ -1,5 +1,5 @@
 extends CharacterBody2D
-## Beasts and demonic cultivators. They chase, bite, shoot, and never enter safe settlements.
+## Beasts and demonic cultivators. They chase, bite and shoot the player or bound beasts.\n## Settlements block them, except Shi Lan Village during a beast tide.
 
 signal fired(from: Vector2, dir: Vector2, spec: Dictionary)
 
@@ -17,6 +17,9 @@ var wander_t := 0.0
 var aggro := false
 var home := Vector2.INF
 var radius := 12.0
+var knock := Vector2.ZERO
+## Beast-tide raider: marches on the village instead of wandering.
+var raider := false
 
 
 func setup(enemy_id: String, pos: Vector2, day: int, home_pos := Vector2.INF) -> void:
@@ -56,6 +59,11 @@ func take_damage(dmg: float, slow := 0.0) -> void:
 		slow_amt = maxf(slow_amt, slow)
 
 
+func push(impulse: Vector2) -> void:
+	if not is_boss():
+		knock += impulse
+
+
 func _physics_process(delta: float) -> void:
 	flash = maxf(0.0, flash - delta)
 	atk_t -= delta
@@ -64,16 +72,27 @@ func _physics_process(delta: float) -> void:
 	if slow_t <= 0.0:
 		slow_amt = 0.0
 	var ppos: Vector2 = Game.p["pos"]
-	var to_p := ppos - position
-	var d := maxf(0.001, to_p.length())
-	var safe := Game.world.is_safe(ppos)
-	var leash := home != Vector2.INF and position.distance_to(home) > 500.0
 	var night_mult := 1.25 if Game.is_night() else 1.0
-	aggro = not safe and d < def["aggro"] * night_mult and not (home != Vector2.INF and ppos.distance_to(home) > 650.0)
+	var aggro_r: float = def["aggro"] * night_mult * (1.6 if raider else 1.0)
+	# Target: the player (unless sheltered in a settlement) or the nearest bound beast.
+	var target: Node2D = null
+	var tpos := Vector2.INF
+	if not Game.blocks_enemies(ppos) and position.distance_to(ppos) < aggro_r \
+			and not (home != Vector2.INF and ppos.distance_to(home) > 650.0):
+		tpos = ppos
+	for a in get_tree().get_nodes_in_group("allies"):
+		var ad: float = position.distance_to(a.position)
+		if ad < aggro_r * 0.8 and (tpos == Vector2.INF or ad < position.distance_to(tpos)):
+			target = a
+			tpos = a.position
+	aggro = tpos != Vector2.INF
+	var leash := home != Vector2.INF and position.distance_to(home) > 500.0 and not raider
 	var speed: float = def["speed"] * (1.0 - slow_amt)
 	var move := Vector2.ZERO
 	if aggro:
-		var dir := to_p / d
+		var to_t := tpos - position
+		var d := maxf(0.001, to_t.length())
+		var dir := to_t / d
 		if def.has("ranged"):
 			var rr: float = def["ranged"]["range"]
 			if d < rr * 0.6:
@@ -85,10 +104,19 @@ func _physics_process(delta: float) -> void:
 				fired.emit(position, dir, def["ranged"])
 		else:
 			move = dir
-		if d < radius + 14.0 and atk_t <= 0.0:
+		var reach: float = radius + (target.radius if target else 0.0) + 14.0
+		if d < reach and atk_t <= 0.0:
 			atk_t = def["attack_cd"]
 			var dmg: float = def["damage"] * (1.0 if is_boss() else 1.0 + Game.day() * 0.03)
-			Game.hurt_player(dmg, def["name"])
+			if target:
+				target.take_damage(dmg)
+			else:
+				Game.hurt_player(dmg, def["name"])
+	elif raider:
+		# Beast tide: march on the village heart.
+		var heart := WorldData.poi_center("village")
+		if position.distance_to(heart) > 40.0:
+			move = (heart - position).normalized()
 	elif leash:
 		move = (home - position).normalized()
 	else:
@@ -98,10 +126,12 @@ func _physics_process(delta: float) -> void:
 			wander_dir = Vector2.ZERO if randf() < 0.4 else Vector2.from_angle(randf() * TAU) * 0.4
 		move = wander_dir
 	velocity = move * speed
-	# Safe settlements are impassable for monsters.
-	if velocity != Vector2.ZERO and Game.world.is_safe(position + velocity.normalized() * (radius + 6.0)):
+	# Settlements are impassable for monsters (except the village during a beast tide).
+	if velocity != Vector2.ZERO and Game.blocks_enemies(position + velocity.normalized() * (radius + 6.0)):
 		velocity = Vector2.ZERO
 		wander_t = 0.0
+	velocity += knock
+	knock = knock.move_toward(Vector2.ZERO, 900.0 * delta)
 	move_and_slide()
 	queue_redraw()
 

@@ -2,7 +2,8 @@ extends Node
 ## Entry point: title screen -> world + HUD.
 ## Debug/screenshot args (via tools/godot.sh shot ... -- --autostart=1 ...):
 ##   --autostart=1 --seed=N --night=1 --at=ruins|city|forbidden|wild --enemies=N
-##   --give=moon_glow,liquor_worm --rank=2 --panel=aperture|bag|craft|shop|elder|map|help
+##   --give=moon_glow,liquor_worm --rank=2 --panel=aperture|bag|craft|shop|elder|map|help --tab=missions
+##   --tide=1 (Day 5 night, beast tide running) --contrib=N --missions=1 (accept all offered)
 
 const WorldView := preload("res://world/world_view.gd")
 
@@ -53,6 +54,14 @@ func _apply_debug_before(args: Dictionary) -> void:
 		Game.p["pos"] = pos
 	if args.has("night"):
 		Game.time = floorf(Game.time) + 0.8
+	if args.has("tide"):
+		Game.time = 4.69
+		Game.flags["tide_on"] = true
+		Game.flags["tide_kills"] = 0
+	Game.p["contrib"] = int(args.get("contrib", str(Game.p["contrib"])))
+	if args.has("missions"):
+		for q in Game.missions()["offered"].duplicate():
+			Game.accept_mission(q["id"])
 	Game.p["stones"] = int(args.get("stones", str(Game.p["stones"])))
 	Game.rebuild()
 	Game.p["essence"] = Game.max_essence()
@@ -64,8 +73,12 @@ func _apply_debug_after(args: Dictionary) -> void:
 		var e: Node = world.combat.spawn("wolf", Game.p["pos"] + Vector2.from_angle(i * TAU / n) * 170.0)
 		e.aggro = true
 	if args.has("panel") and hud:
-		hud.open_panel(args["panel"], {"shop": args.get("shop", "village"), "tab": args.get("tab", "gu"), "dest": "city"})
+		hud.open_panel(args["panel"], {"shop": args.get("shop", "village"), "tab": args.get("tab", "gu"), "dest": "city", "clan": true})
 	_report = args.has("report")
+	if _report:
+		get_tree().create_timer(float(args.get("report_at", "5"))).timeout.connect(func():
+			print("report@t: enemies=%d allies=%d kills=%d hp=%.0f" % [get_tree().get_nodes_in_group("enemies").size(),
+				get_tree().get_nodes_in_group("allies").size(), Game.p["kills"], Game.p["hp"]]))
 	if args.has("act"):
 		await get_tree().create_timer(0.3).timeout
 		Game.action_requested = true
@@ -75,6 +88,5 @@ var _report := false
 
 func _exit_tree() -> void:
 	if _report and not Game.p.is_empty():
-		print("report: hp=%.0f/%.0f essence=%.0f kills=%d enemies=%d stones=%d pos=%s zone=%s" % [
-			Game.p["hp"], Game.max_hp(), Game.p["essence"], Game.p["kills"],
-			get_tree().get_nodes_in_group("enemies").size(), Game.p["stones"], Game.p["pos"], Game.world.zone_at(Game.p["pos"])])
+		print("report: hp=%.0f/%.0f essence=%.0f kills=%d stones=%d zone=%s" % [
+			Game.p["hp"], Game.max_hp(), Game.p["essence"], Game.p["kills"], Game.p["stones"], Game.world.zone_at(Game.p["pos"])])

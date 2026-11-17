@@ -12,7 +12,7 @@ const STAGE_NAMES := ["Initial Stage", "Middle Stage", "Upper Stage", "Peak Stag
 const ESSENCE_COLORS := ["#ffffff", "#3fae6a", "#c0392b", "#dfe6e9", "#f1c40f", "#8e44ad"]
 const ESSENCE_NAMES := ["", "Green Copper", "Red Steel", "White Silver", "Yellow Gold", "Purple Crystal"]
 const STAT_KEYS := ["armor", "max_hp", "hp_regen", "max_essence", "essence_regen", "move_speed",
-	"damage_mult", "shield", "light_radius", "reveal", "pickup"]
+	"damage_mult", "shield", "light_radius", "reveal", "pickup", "summon_count", "summon_damage"]
 
 
 static func size_for_rank(rank: int) -> int:
@@ -130,7 +130,7 @@ static func _add_stats(into: Dictionary, s: Variant) -> void:
 		into[k] += float(s[k])
 
 
-## Returns {attacks, heals, stats, synergies, killer_moves, inactive}
+## Returns {attacks, heals, summons, stats, synergies, killer_moves, inactive}
 static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 	var size := size_for_rank(rank)
 	var stats := empty_stats()
@@ -232,5 +232,16 @@ static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 
 	for a in attacks:
 		a["damage"] = a["damage"] * (1.0 + stats["damage_mult"])
-	return {"attacks": attacks, "heals": heals, "stats": stats, "synergies": synergies,
+
+	# Summons (enslavement path): one entry per summoning Gu; killer moves can add more.
+	var summons: Array = []
+	for p in active:
+		var d := def_of(gu, p["uid"])
+		if d.has("summon"):
+			var s: Dictionary = d["summon"].duplicate()
+			s["key"] = "s%d" % p["uid"]
+			s["count"] = int(s["count"] + stats["summon_count"])
+			s["damage"] = s["damage"] * (1.0 + stats["summon_damage"] + stats["damage_mult"])
+			summons.append(s)
+	return {"attacks": attacks, "heals": heals, "summons": summons, "stats": stats, "synergies": synergies,
 		"killer_moves": killer_moves, "inactive": inactive}

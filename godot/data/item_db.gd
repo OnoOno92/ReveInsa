@@ -34,6 +34,8 @@ const RECIPES := [
 		"desc": "Weave silk around a bone core."},
 	{"id": "r_jadebone", "name": "Refine: Jade Bone Gu", "needs": {"bone": 3, "stone": 4}, "stones": 15, "output": {"gu": "jade_bone"},
 		"desc": "Temper bone with stone."},
+	{"id": "r_wolfslave", "name": "Refine: Wolf Enslavement Gu", "needs": {"pelt": 4, "bone": 2, "meat": 2}, "stones": 30, "output": {"gu": "wolf_slave"},
+		"desc": "Bind a wolf's spirit into a Gu with pelt, bone and blood."},
 	{"id": "r_moonglow", "name": "Refine: Moon Glow Gu", "needs": {"moon_orchid": 6}, "stones": 40, "gu_input": "moonlight", "min_rank": 2,
 		"output": {"gu": "moon_glow"}, "desc": "Advance a Moonlight Gu into rank 2 Moon Glow Gu."},
 	{"id": "r_jadeskin", "name": "Refine: White Jade Gu", "needs": {"jade_shard": 3}, "stones": 40, "gu_input": "stone_skin", "min_rank": 2,
@@ -49,12 +51,13 @@ const RECIPES := [
 const SHOPS := {
 	"village": {
 		"name": "Village Merchant",
-		"gu": ["moonlight", "stone_skin", "vitality_leaf", "liquor_worm", "black_boar", "earth_ear"],
+		"gu": ["moonlight", "spark", "water_arrow", "stone_skin", "vitality_leaf", "liquor_worm", "black_boar", "earth_ear"],
 		"items": ["rice_ball", "wine", "moon_orchid", "meat", "herb"],
 	},
 	"city": {
 		"name": "Shang Clan Trading Hall",
-		"gu": ["wind_blade", "water_shield", "spider_silk", "jade_bone", "moon_glow", "thunder_bead", "fire_ember", "jade_skin", "four_flavors"],
+		"gu": ["wind_blade", "water_shield", "spider_silk", "jade_bone", "bronze_skin", "essence_spring",
+			"moon_glow", "thunder_bead", "fire_ember", "wood_thorn", "gust", "jade_skin", "four_flavors"],
 		"items": ["rice_ball", "wine", "moon_orchid", "thunder_crystal", "jade_shard", "cooked_meat"],
 	},
 }

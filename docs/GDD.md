@@ -42,11 +42,15 @@ explore → gather / hunt → feed Gu, eat → buy / refine Gu → rearrange ape
 ## Roadmap
 
 ### v0.2 — Depth of the Southern Border
-- Clan reputation and quests from the village elder (missions, contribution points as a second currency).
-- More Gu (~40 rank 1–3) across all paths, including enslavement Gu that tame beasts as summons.
-- Gu durability and "using a higher-rank Gu costs extra essence", instead of the current hard lock.
-- Beast tides: periodic events where packs attack the village.
-- Buildable shelters, storage chests, and Gu-food gardens (moon orchid beds, wine brewing).
+- [x] Engine: ported to Godot 4.7 (`godot/`); the web build is kept as a reference.
+- [x] Clan missions from the village elder (hunt / deliver / scout), clan contribution as a second currency, and a Clan Treasury (rare Gu, aptitude pill).
+- [x] Beast tides: every 5th night, raiders storm Shi Lan Village; clan guards defend; rewards at dawn.
+- [x] Enslavement path: Wolf Enslavement Gu summons a wolf companion; enemies target allies too.
+- [x] +8 Gu (now 25) and +3 killer moves (now 8): Steam Burst, Wolf Pack Command, Thorned Gale; knockback on Gust Gu.
+- [ ] More Gu (~40 rank 1–3) across all paths; more enslaved beasts (boar, thunder wolf).
+- [ ] Gu durability and "using a higher-rank Gu costs extra essence", instead of the current hard lock.
+- [ ] Buildable shelters, storage chests, and Gu-food gardens (moon orchid beds, wine brewing).
+- [ ] Clan reputation and multiple clans.
 
 ### v0.3 — Living world
 - More villages and clans with their own reputation and shops. Clan wars.

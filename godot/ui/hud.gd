@@ -11,6 +11,8 @@ var hp_bar: Widgets.StatBar
 var ess_bar: Widgets.StatBar
 var hun_bar: Widgets.StatBar
 var clock_label: Label
+var mission_label: RichTextLabel
+var tide_label: Label
 var zone_label: Label
 var minimap: Widgets.MapView
 var stones_btn: Button
@@ -59,6 +61,10 @@ func _ready() -> void:
 	hun_bar = Widgets.StatBar.new(Color("#d08a2a"))
 	for b in [hp_bar, ess_bar, hun_bar]:
 		tl.add_child(b)
+	mission_label = Widgets.rich("", 12)
+	mission_label.custom_minimum_size = Vector2(260, 0)
+	mission_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tl.add_child(mission_label)
 
 	# --- top-center: clock + zone
 	var tc := VBoxContainer.new()
@@ -69,7 +75,10 @@ func _ready() -> void:
 	root.add_child(tc)
 	clock_label = Widgets.label("", 14)
 	zone_label = Widgets.label("", 12, UITheme.MUTED)
-	for l in [clock_label, zone_label]:
+	tide_label = Widgets.label("", 18, Color("#ff8080"))
+	tide_label.add_theme_constant_override("outline_size", 6)
+	tide_label.add_theme_color_override("font_outline_color", Color(0.15, 0, 0))
+	for l in [clock_label, zone_label, tide_label]:
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		tc.add_child(l)
 
@@ -194,6 +203,23 @@ func _process(delta: float) -> void:
 	zone_label.text = zone_name
 	zone_label.add_theme_color_override("font_color", UITheme.BAD if z == "forbidden" else (UITheme.JADE if z in ["village", "city"] else UITheme.MUTED))
 	stones_btn.text = "%d primeval stones" % p["stones"]
+	# beast tide banner
+	if Game.tide_active():
+		tide_label.text = "BEAST TIDE - %d slain" % int(Game.flags.get("tide_kills", 0))
+		tide_label.modulate.a = 0.65 + 0.35 * sin(Game.clock * 5.0)
+	elif Game.is_tide_day():
+		tide_label.text = "Beast tide tonight"
+		tide_label.modulate.a = 0.8
+	else:
+		tide_label.text = ""
+	# mission tracker
+	var lines: Array[String] = []
+	for q in p["quests"]["active"]:
+		var done := Quests.is_complete(q, p["inventory"])
+		lines.append("[color=%s]%s %s %d/%d[/color]" % ["#7cfc8a" if done else "#e8dfc8", "v" if done else "-", q["title"], Quests.progress(q, p["inventory"]), q["count"]])
+	var mt := "\n".join(lines)
+	if mission_label.text != mt:
+		mission_label.text = mt
 	var label: String = world.interact.get("label", "-") if world else "-"
 	action_btn.text = label
 	action_btn.modulate = Color.WHITE if label != "-" else Color(1, 1, 1, 0.6)
@@ -316,7 +342,7 @@ func _on_changed() -> void:
 func _on_npc(npc: Dictionary) -> void:
 	match npc["role"]:
 		"merchant": open_panel("shop", {"shop": npc["shop"], "tab": "gu"})
-		"elder": open_panel("elder", {})
+		"elder": open_panel("elder", {"clan": npc["poi"] == "village", "tab": "cultivate"})
 		"caravan": open_panel("caravan", {"dest": npc["dest"]})
 
 

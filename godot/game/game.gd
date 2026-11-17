@@ -50,6 +50,7 @@ func new_game(player_name: String, world_seed := -1) -> Dictionary:
 		"rank": 1, "stage": 0, "cultivation": 0.0, "aptitude": aptitude, "stones": 30,
 		"inventory": {"meat": 2, "moon_orchid": 4, "herb": 4, "rice_ball": 2, "wood": 2},
 		"gu": [], "placed": [], "next_uid": 1, "kills": 0,
+		"contrib": 0, "quests": {"offered": [], "active": []}, "next_quest": 1,
 	}
 	time = 0.12
 	flags = {}
@@ -57,6 +58,7 @@ func new_game(player_name: String, world_seed := -1) -> Dictionary:
 	shield = 0.0
 	add_gu("moonlight", true)
 	add_gu("stone_skin" if rng.randf() < 0.5 else "vitality_leaf", true)
+	refill_missions()
 	rebuild()
 	p["hp"] = max_hp()
 	p["essence"] = max_essence()
@@ -108,6 +110,15 @@ func load_game() -> bool:
 			pl[k] = int(pl[k])
 	for k in p["inventory"].keys():
 		p["inventory"][k] = int(p["inventory"][k])
+	# Fields added after v0.1 saves
+	p["contrib"] = int(p.get("contrib", 0))
+	p["next_quest"] = int(p.get("next_quest", 1))
+	if not p.has("quests"):
+		p["quests"] = {"offered": [], "active": []}
+	for list_name in ["offered", "active"]:
+		for q in p["quests"][list_name]:
+			for k in ["id", "count", "progress", "stones", "contrib"]:
+				q[k] = int(q[k])
 	var by_id := {}
 	for n in world.nodes:
 		by_id[n["id"]] = n
@@ -440,6 +451,8 @@ func _on_new_day() -> void:
 				lines.append("%s starved to death!" % d["name"])
 			elif inst["unfed"] > d["feed_every"]:
 				lines.append("%s is starving (needs %s)." % [d["name"], ItemDB.ITEMS[d["food"]]["name"]])
+	_tide_reward()
+	refill_missions()
 	rebuild()
 	toast.emit("Day %d dawns." % (day() + 1), "gold")
 	for l in lines:
@@ -449,12 +462,151 @@ func _on_new_day() -> void:
 	save_game()
 
 
+# ------------------------------------------------------------------ clan missions & treasury
+func missions() -> Dictionary:
+	return p["quests"]
+
+func refill_missions() -> void:
+	var offered: Array = p["quests"]["offered"]
+	while offered.size() < Quests.MAX_OFFERED:
+		offered.append(Quests.generate(rng, p["rank"], p["next_quest"]))
+		p["next_quest"] += 1
+
+func accept_mission(id: int) -> void:
+	var q := _find_mission("offered", id)
+	if q.is_empty():
+		return
+	if p["quests"]["active"].size() >= Quests.MAX_ACTIVE:
+		toast.emit("You can only carry %d missions at once." % Quests.MAX_ACTIVE, "bad")
+		return
+	p["quests"]["offered"].erase(q)
+	p["quests"]["active"].append(q)
+	toast.emit("Mission accepted: %s." % q["title"], "good")
+	changed.emit()
+
+func abandon_mission(id: int) -> void:
+	var q := _find_mission("active", id)
+	if q.is_empty():
+		return
+	p["quests"]["active"].erase(q)
+	toast.emit("Mission abandoned: %s." % q["title"], "info")
+	changed.emit()
+
+func claim_mission(id: int) -> void:
+	var q := _find_mission("active", id)
+	if q.is_empty() or not Quests.is_complete(q, p["inventory"]):
+		return
+	if q["type"] == "gather":
+		add_item(q["target"], -q["count"])
+	p["quests"]["active"].erase(q)
+	p["stones"] += q["stones"]
+	p["contrib"] += q["contrib"]
+	toast.emit("Mission complete: %s. +%d stones, +%d contribution." % [q["title"], q["stones"], q["contrib"]], "gold")
+	refill_missions()
+	changed.emit()
+	save_game()
+
+func _find_mission(list_name: String, id: int) -> Dictionary:
+	for q in p["quests"][list_name]:
+		if q["id"] == id:
+			return q
+	return {}
+
+func on_enemy_killed(enemy_id: String, was_raider: bool) -> void:
+	for q in p["quests"]["active"]:
+		if q["type"] == "hunt" and q["target"] == enemy_id and q["progress"] < q["count"]:
+			q["progress"] += 1
+			if q["progress"] == q["count"]:
+				toast.emit("Mission ready to report: %s." % q["title"], "good")
+	if was_raider:
+		flags["tide_kills"] = int(flags.get("tide_kills", 0)) + 1
+
+func _track_explore() -> void:
+	var z := world.zone_at(p["pos"])
+	for q in p["quests"]["active"]:
+		if q["type"] == "explore" and q["progress"] < 1 and WorldData.ZONE_IDS[WorldData.poi(q["target"])["zone"]] == z:
+			q["progress"] = 1
+			toast.emit("Scouted %s. Report back to the elder." % WorldData.poi(q["target"])["name"], "good")
+			changed.emit()
+
+func buy_treasury(entry_id: String) -> void:
+	var e: Dictionary = {}
+	for t in Quests.TREASURY:
+		if t["id"] == entry_id:
+			e = t
+	if e.is_empty():
+		return
+	if p["contrib"] < e["cost"]:
+		toast.emit("Not enough clan contribution.", "bad")
+		return
+	if e["kind"] == "pill":
+		if p["aptitude"] >= 0.99:
+			toast.emit("Your aptitude cannot rise any further.", "info")
+			return
+		p["contrib"] -= e["cost"]
+		p["aptitude"] = minf(0.99, p["aptitude"] + 0.05)
+		toast.emit("Your primeval sea widens: aptitude %d%% (Grade %s)." % [roundi(p["aptitude"] * 100), grade_of(p["aptitude"])], "gold")
+	else:
+		p["contrib"] -= e["cost"]
+		add_gu(e["id"], true)
+		toast.emit("The clan grants you %s." % GuDB.GU[e["id"]]["name"], "gold")
+	rebuild(); changed.emit(); save_game()
+
+
+# ------------------------------------------------------------------ beast tides
+## Every 5th day (Day 5, 10, ...) beasts storm Shi Lan Village at night.
+func is_tide_day() -> bool:
+	return (day() + 1) % 5 == 0
+
+func tide_active() -> bool:
+	return is_tide_day() and tod() > 0.68
+
+## Settlements keep monsters out, except the village during a beast tide.
+func blocks_enemies(pos: Vector2) -> bool:
+	if not world.is_safe(pos):
+		return false
+	return not (tide_active() and world.zone_at(pos) == "village")
+
+func _tide_transitions(prev_tod: float) -> void:
+	if not is_tide_day():
+		return
+	var t := tod()
+	if prev_tod < 0.5 and t >= 0.5:
+		toast.emit("War drums from the wilds... a BEAST TIDE will strike Shi Lan Village tonight!", "bad")
+	if prev_tod < 0.68 and t >= 0.68:
+		flags["tide_kills"] = 0
+		flags["tide_on"] = true
+		toast.emit("BEAST TIDE! Defend Shi Lan Village until dawn!", "bad")
+
+func _tide_reward() -> void:
+	if not flags.get("tide_on", false):
+		return
+	flags.erase("tide_on")
+	var kills := int(flags.get("tide_kills", 0))
+	flags.erase("tide_kills")
+	if kills <= 0:
+		toast.emit("The beast tide passed. The clan noticed you were not on the walls.", "info")
+		return
+	var stones: int = kills * 4 * p["rank"]
+	var contrib := kills * 2 + 15
+	p["stones"] += stones
+	p["contrib"] += contrib
+	toast.emit("The beast tide is repelled! You slew %d beasts: +%d stones, +%d contribution." % [kills, stones, contrib], "gold")
+
+
 # ------------------------------------------------------------------ per-frame survival (driven by the world scene)
+var _explore_t := 0.0
 func tick(delta: float) -> void:
 	clock += delta
 	_absorb_cd = maxf(0.0, _absorb_cd - delta)
 	var prev := day()
+	var prev_tod := tod()
 	time += delta / DAY_SECONDS
+	_tide_transitions(prev_tod)
+	_explore_t -= delta
+	if _explore_t <= 0.0:
+		_explore_t = 0.5
+		_track_explore()
 	if day() != prev:
 		time = float(day())
 		_on_new_day()
@@ -498,7 +650,11 @@ func die(reason: String) -> void:
 	p["hp"] = max_hp() * 0.6
 	p["hunger"] = maxf(p["hunger"], 40.0)
 	p["essence"] = max_essence() * 0.3
-	advance_time(0.25)
+	if tide_active():
+		reason += " The clan guards held the walls until dawn."
+		advance_time(day() + 1.02 - time)
+	else:
+		advance_time(0.25)
 	toast.emit("%s Your clan carried you home. Lost %d stones and half your supplies." % [reason, lost], "bad")
 	died.emit()
 	teleported.emit(p["pos"])

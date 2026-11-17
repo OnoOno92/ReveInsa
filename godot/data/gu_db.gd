@@ -7,13 +7,13 @@ extends RefCounted
 const PATH_COLORS := {
 	"moon": "#9ecbff", "strength": "#c0743a", "earth": "#b39b6b", "water": "#3fa7d6",
 	"fire": "#ef5b3c", "wood": "#5cb85c", "wind": "#8fe3c8", "lightning": "#c9a6ff",
-	"information": "#f2d36b", "enslavement": "#d16ba5",
+	"information": "#f2d36b", "enslavement": "#d16ba5", "metal": "#c9c9d6",
 }
 
 const PATH_NAMES := {
 	"moon": "Moon Path", "strength": "Strength Path", "earth": "Earth Path", "water": "Water Path",
 	"fire": "Fire Path", "wood": "Wood Path", "wind": "Wind Path", "lightning": "Lightning Path",
-	"information": "Information Path", "enslavement": "Enslavement Path",
+	"information": "Information Path", "enslavement": "Enslavement Path", "metal": "Metal Path",
 }
 
 # attack.kind: projectile | fan | nova | chain
@@ -79,6 +79,36 @@ const GU := {
 		"desc": "Lightens the bones. +12% move speed and a wider loot pickup radius.",
 		"stats": {"move_speed": 0.12, "pickup": 40.0},
 	},
+	"wolf_slave": {
+		"name": "Wolf Enslavement Gu", "path": "enslavement", "rank": 1, "role": "summon",
+		"shape": [Vector2i(0, 0), Vector2i(1, 0)], "food": "meat", "feed_every": 2, "price": 60,
+		"desc": "Binds a grey wolf to your will. It fights at your side and returns 20s after falling.",
+		"summon": {"kind": "wolf", "count": 1, "hp": 60.0, "damage": 7.0, "speed": 165.0, "respawn": 20.0},
+	},
+	"water_arrow": {
+		"name": "Water Arrow Gu", "path": "water", "rank": 1, "role": "attack",
+		"shape": [Vector2i(0, 0), Vector2i(1, 0)], "food": "herb", "feed_every": 3, "price": 35,
+		"desc": "Shoots a heavy arrow of water that slows its target by 25%.",
+		"attack": {"kind": "projectile", "damage": 9.0, "cooldown": 1.0, "range": 260.0, "cost": 1.6, "speed": 460.0, "slow": 0.25, "size": 6.0, "color": "#7fd0ff"},
+	},
+	"spark": {
+		"name": "Spark Gu", "path": "fire", "rank": 1, "role": "attack",
+		"shape": [Vector2i(0, 0)], "food": "wood", "feed_every": 2, "price": 30,
+		"desc": "Flicks fast embers at the nearest foe. Weak, but very quick.",
+		"attack": {"kind": "projectile", "damage": 5.0, "cooldown": 0.45, "range": 200.0, "cost": 0.8, "speed": 520.0, "size": 4.0, "color": "#ffb36b"},
+	},
+	"bronze_skin": {
+		"name": "Bronze Skin Gu", "path": "metal", "rank": 1, "role": "defense",
+		"shape": [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)], "food": "stone", "feed_every": 3, "price": 55,
+		"desc": "Skin takes on a bronze sheen. +7 armor, but it is bulky.",
+		"stats": {"armor": 7.0},
+	},
+	"essence_spring": {
+		"name": "Essence Spring Gu", "path": "water", "rank": 1, "role": "passive",
+		"shape": [Vector2i(0, 0), Vector2i(0, 1)], "food": "moon_orchid", "feed_every": 3, "price": 50,
+		"desc": "A spring of primeval essence wells in your aperture. +35% essence regen, +15 max essence.",
+		"stats": {"essence_regen": 0.35, "max_essence": 15.0},
+	},
 	# ---------------- Rank 2 ----------------
 	"moon_glow": {
 		"name": "Moon Glow Gu", "path": "moon", "rank": 2, "role": "attack",
@@ -109,6 +139,18 @@ const GU := {
 		"shape": [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)], "food": "wine", "feed_every": 2, "price": 200,
 		"desc": "A refined liquor worm. Adjacent attack Gu: +50% damage, 15% faster, 25% cheaper.",
 		"aura": {"damage_mult": 0.5, "cooldown_mult": -0.15, "cost_mult": -0.25},
+	},
+	"wood_thorn": {
+		"name": "Wood Thorn Gu", "path": "wood", "rank": 2, "role": "attack",
+		"shape": [Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1)], "food": "herb", "feed_every": 2, "price": 150,
+		"desc": "Sprays a fan of four hard thorns.",
+		"attack": {"kind": "fan", "damage": 11.0, "cooldown": 1.6, "range": 240.0, "cost": 3.5, "count": 4, "spread": 0.6, "speed": 420.0, "size": 5.0, "color": "#9be07a"},
+	},
+	"gust": {
+		"name": "Gust Gu", "path": "wind", "rank": 2, "role": "attack",
+		"shape": [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)], "food": "herb", "feed_every": 3, "price": 140,
+		"desc": "A burst of wind that hurls nearby foes away.",
+		"attack": {"kind": "nova", "damage": 12.0, "cooldown": 3.0, "range": 120.0, "radius": 120.0, "cost": 3.5, "knockback": 160.0, "color": "#c8fff0"},
 	},
 	# ---------------- Rank 3 ----------------
 	"bear_strength": {
@@ -153,6 +195,21 @@ const KILLER_MOVES := [
 		"desc": "Wood feeds fire: a huge flame ring, and the ashes heal you (+1.5 HP/s).",
 		"stats": {"hp_regen": 1.5},
 		"attack": {"kind": "nova", "damage": 38.0, "cooldown": 5.0, "range": 150.0, "radius": 150.0, "cost": 10.0, "color": "#ffb347"},
+	},
+	{
+		"id": "wolf_pack", "name": "Wolf Pack Command", "requires": ["wolf_slave", "earth_ear"], "min_rank": 1,
+		"desc": "The earth carries your commands: one more wolf answers, and the pack bites 50% harder.",
+		"stats": {"summon_count": 1.0, "summon_damage": 0.5},
+	},
+	{
+		"id": "steam_burst", "name": "Steam Burst", "requires": ["water_arrow", "spark"], "min_rank": 1,
+		"desc": "Water meets fire: a scalding cloud bursts around you, slowing everything inside.",
+		"attack": {"kind": "nova", "damage": 14.0, "cooldown": 3.5, "range": 95.0, "radius": 95.0, "cost": 4.0, "slow": 0.3, "color": "#e8f4ff"},
+	},
+	{
+		"id": "thorned_gale", "name": "Thorned Gale", "requires": ["gust", "wood_thorn"], "min_rank": 2,
+		"desc": "The gale carries a storm of thorns in every direction.",
+		"attack": {"kind": "fan", "damage": 14.0, "cooldown": 4.0, "range": 260.0, "cost": 9.0, "count": 12, "spread": 6.0, "speed": 400.0, "pierce": 2, "size": 5.0, "color": "#b8f59a"},
 	},
 ]
 

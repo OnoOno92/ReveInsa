@@ -3,11 +3,14 @@ extends Node2D
 ## paying primeval essence. Also owns projectiles (drawn here) and enemy spawning.
 
 const EnemyScript := preload("res://actors/enemy.gd")
+const AllyScript := preload("res://actors/ally.gd")
 
 var view: Node # world_view.gd
 var projectiles: Array = [] # {pos, vel, damage, life, size, color, friendly, pierce, slow, hit: {}}
 var timers := {}
 var spawn_t := 0.0
+var ally_respawn := {} # summon key -> seconds until a fallen beast returns
+var _guards_posted := false
 
 
 func enemies() -> Array:
@@ -18,6 +21,8 @@ func clear_enemies(keep_boss := true) -> void:
 	for e in enemies():
 		if not (keep_boss and e.is_boss()):
 			e.queue_free()
+	for a in allies():
+		a.position = Game.p["pos"] + Vector2.from_angle(randf() * TAU) * 30.0
 	projectiles.clear()
 
 
@@ -50,8 +55,9 @@ func _on_enemy_fired(from: Vector2, dir: Vector2, spec: Dictionary) -> void:
 
 func _physics_process(delta: float) -> void:
 	_update_spawns(delta)
+	_update_allies(delta)
 	_update_heals(delta)
-	if not Game.world.is_safe(Game.p["pos"]):
+	if not Game.world.is_safe(Game.p["pos"]) or Game.tide_active():
 		_update_attacks(delta)
 	_update_projectiles(delta)
 	for e in enemies():
@@ -70,6 +76,9 @@ func _update_spawns(delta: float) -> void:
 	if spawn_t > 0.0:
 		return
 	spawn_t = 1.3
+	if Game.tide_active() and ppos.distance_to(WorldData.poi_center("village")) < 45.0 * WorldData.TILE:
+		_spawn_raiders()
+		return
 	var cap := roundi((12.0 if Game.is_night() else 7.0) + Game.world.danger_at(ppos) * 8.0)
 	if enemies().size() >= cap:
 		return
@@ -94,6 +103,94 @@ func _update_spawns(delta: float) -> void:
 		for i in pack:
 			spawn(pick, pos + Vector2(i * 20, i * 14))
 		return
+
+
+## Beast tide: packs pour in from the wilds around the village.
+func _spawn_raiders() -> void:
+	spawn_t = 1.0
+	var raiders := enemies().filter(func(e): return e.raider)
+	if raiders.size() >= 5 + Game.day():
+		return
+	spawn_t = maxf(1.2, 3.0 - Game.day() * 0.1)
+	var heart := WorldData.poi_center("village")
+	var pool := ["wolf", "night_wolf", "night_wolf", "boar"]
+	if Game.day() >= 9:
+		pool.append("thunder_wolf")
+	for attempt in 8:
+		var pos := heart + Vector2.from_angle(randf() * TAU) * randf_range(15.0, 19.0) * WorldData.TILE
+		if Game.world.is_solid_pos(pos):
+			continue
+		var pick: String = pool[randi() % pool.size()]
+		for i in (randi_range(1, 2) if pick != "thunder_wolf" else 1):
+			var e = spawn(pick, pos + Vector2(i * 22, i * 12))
+			e.raider = true
+		return
+
+
+# ------------------------------------------------------------------ summons
+## Clan guards hold posts around the village heart while a beast tide rages.
+func _update_guards() -> void:
+	var guards := allies().filter(func(a): return a.mode == "guard")
+	if not Game.tide_active():
+		for g in guards:
+			g.queue_free()
+		_guards_posted = false
+		return
+	for g in guards:
+		if g.hp <= 0.0:
+			view.fx.add("burst", g.position, Color("#3d6a8a"), 0.5)
+			g.queue_free()
+	if _guards_posted:
+		return
+	_guards_posted = true
+	var heart := WorldData.poi_center("village")
+	for off in [Vector2(-5, -3), Vector2(5, -3), Vector2(-5, 4), Vector2(5, 4)]:
+		var g: CharacterBody2D = AllyScript.new()
+		g.setup_guard(heart + off * WorldData.TILE)
+		g.shoot.connect(_on_guard_shoot)
+		view.entities.add_child(g)
+
+
+func _on_guard_shoot(from: Vector2, dir: Vector2) -> void:
+	projectiles.append({"pos": from, "vel": dir * 420.0, "damage": 9.0 + Game.day() * 0.6, "life": 0.7,
+		"size": 7.0, "color": Color("#bfe0ff"), "friendly": true, "pierce": 0, "slow": 0.0, "hit": {}})
+
+
+func allies() -> Array:
+	return get_tree().get_nodes_in_group("allies")
+
+
+func _update_allies(delta: float) -> void:
+	var want := {}
+	for s in Game.build.get("summons", []):
+		want[s["key"]] = s
+	var have := {}
+	_update_guards()
+	for a in allies():
+		if a.mode == "guard":
+			continue
+		if a.hp <= 0.0:
+			view.fx.add("burst", a.position, Color("#b9a98c"), 0.5)
+			var spec: Dictionary = want.get(a.key, {})
+			ally_respawn[a.key] = spec.get("respawn", 20.0)
+			a.queue_free()
+			continue
+		if not want.has(a.key) or have.get(a.key, 0) >= want[a.key]["count"]:
+			a.queue_free() # Gu removed, starving, or count reduced
+			continue
+		have[a.key] = have.get(a.key, 0) + 1
+		a.damage = want[a.key]["damage"]
+	for key in want:
+		var t: float = ally_respawn.get(key, 0.0) - delta
+		ally_respawn[key] = t
+		if t > 0.0:
+			continue
+		var spec: Dictionary = want[key]
+		for i in range(have.get(key, 0), spec["count"]):
+			var a: CharacterBody2D = AllyScript.new()
+			a.setup(spec, i, Game.p["pos"] + Vector2.from_angle(randf() * TAU) * 30.0)
+			view.entities.add_child(a)
+			view.fx.add("ring", a.position, Color("#d16ba5"), 0.5, {"r": 24.0})
 
 
 # ------------------------------------------------------------------ player skills
@@ -158,6 +255,8 @@ func _fire(a: Dictionary, target: Node) -> void:
 			for e in enemies():
 				if e.position.distance_to(origin) < r + e.radius:
 					_hit(e, a["damage"], a.get("slow", 0.0))
+					if a.has("knockback"):
+						e.push((e.position - origin).normalized() * a["knockback"] * 3.0)
 			view.fx.add("ring", origin, col, 0.45, {"r": r})
 		"chain":
 			var hit := {}
@@ -226,6 +325,7 @@ func _kill(e: Node) -> void:
 		Game.add_gu(g)
 		Game.toast.emit("You captured a wild %s!" % GuDB.GU[g]["name"], "gold")
 	Game.p["kills"] += 1
+	Game.on_enemy_killed(e.id, e.raider)
 	view.fx.add("burst", e.position, Color.html(d["color"]), 0.5)
 	if e.is_boss():
 		Game.flags["bear_king_died"] = maxi(1, Game.day())

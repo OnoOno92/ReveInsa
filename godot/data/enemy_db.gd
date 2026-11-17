@@ -28,7 +28,7 @@ const ENEMIES := {
 		"name": "Demonic Gu Master", "faction": "demonic", "hp": 80.0, "speed": 90.0, "damage": 8.0, "attack_cd": 1.2, "radius": 13.0,
 		"color": "#7a1f3d", "aggro": 300.0, "stones": [8, 20],
 		"drops": [{"item": "wine", "chance": 0.3, "min": 1, "max": 2}, {"item": "moon_orchid", "chance": 0.3, "min": 1, "max": 3}],
-		"gu_drop": {"pool": ["moonlight", "stone_skin", "spider_silk", "wind_blade", "liquor_worm", "jade_bone"], "chance": 0.18},
+		"gu_drop": {"pool": ["moonlight", "stone_skin", "spider_silk", "wind_blade", "liquor_worm", "jade_bone", "wolf_slave", "water_arrow", "spark"], "chance": 0.18},
 		"ranged": {"range": 260.0, "speed": 340.0, "damage": 9.0, "cd": 1.6, "color": "#ff6b9a"},
 	},
 	"poison_toad": {

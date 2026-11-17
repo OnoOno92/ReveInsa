@@ -16,7 +16,7 @@ func _init(h: CanvasLayer) -> void:
 func title(kind: String) -> String:
 	return {
 		"aperture": "Aperture", "bag": "Bag", "craft": "Craft & Gu Refinement", "shop": "Trade",
-		"elder": "Cultivation", "caravan": "Caravan", "map": "Southern Border", "help": "Gu Master Guide",
+		"elder": "Clan Elder", "caravan": "Caravan", "map": "Southern Border", "help": "Gu Master Guide",
 	}.get(kind, kind)
 
 
@@ -36,7 +36,7 @@ func build(kind: String, box: VBoxContainer, args: Dictionary) -> void:
 		"bag": _bag(box)
 		"craft": _craft(box)
 		"shop": _shop(box, args)
-		"elder": _elder(box)
+		"elder": _elder(box, args)
 		"caravan": _caravan(box, args)
 		"map": _map(box)
 		"help": _help(box)
@@ -267,7 +267,72 @@ func _shop(box: VBoxContainer, args: Dictionary) -> void:
 
 
 # ------------------------------------------------------------------ elder / caravan / map / help
-func _elder(box: VBoxContainer) -> void:
+func _elder(box: VBoxContainer, args: Dictionary) -> void:
+	var tab: String = args.get("tab", "cultivate")
+	if args.get("clan", false):
+		var tabs: Array = []
+		for t in [["cultivate", "Cultivate"], ["missions", "Clan Missions"], ["treasury", "Clan Treasury"]]:
+			var key: String = t[0]
+			tabs.append(Widgets.button(t[1], func(): args["tab"] = key; hud._rebuild_panel(), true, tab == key, 13))
+		box.add_child(Widgets.row(tabs))
+	match tab:
+		"missions": _missions(box)
+		"treasury": _treasury(box)
+		_: _cultivate(box)
+
+
+func _missions(box: VBoxContainer) -> void:
+	var p := Game.p
+	box.add_child(Widgets.rich("Clan contribution: [color=#ffd76b][b]%d[/b][/color]  -  New missions are posted every dawn." % p["contrib"], 13))
+	box.add_child(Widgets.header("Your missions (%d/%d)" % [p["quests"]["active"].size(), Quests.MAX_ACTIVE]))
+	if p["quests"]["active"].is_empty():
+		box.add_child(Widgets.label("No missions accepted.", 13, UITheme.MUTED))
+	for q in p["quests"]["active"]:
+		var done := Quests.is_complete(q, p["inventory"])
+		var txt := Widgets.rich("[b]%s[/b]  (%d/%d)\n[color=#a69f8f]%s Reward: %d stones, %d contribution.[/color]" % [
+			q["title"], Quests.progress(q, p["inventory"]), q["count"], Quests.describe(q), q["stones"], q["contrib"]], 13)
+		txt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var qid: int = q["id"]
+		var btns: Array = [txt]
+		if done:
+			btns.append(Widgets.button("Report", func(): Game.claim_mission(qid), true, true, 13))
+		btns.append(Widgets.button("Abandon", func(): Game.abandon_mission(qid), true, false, 12))
+		box.add_child(Widgets.row(btns))
+		box.add_child(HSeparator.new())
+	box.add_child(Widgets.header("Mission board"))
+	if p["quests"]["offered"].is_empty():
+		box.add_child(Widgets.label("The board is empty. Report finished missions, or wait for dawn.", 13, UITheme.MUTED))
+	for q in p["quests"]["offered"]:
+		var txt := Widgets.rich("[b]%s[/b]\n[color=#a69f8f]%s Reward: %d stones, %d contribution.[/color]" % [q["title"], Quests.describe(q), q["stones"], q["contrib"]], 13)
+		txt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var qid: int = q["id"]
+		box.add_child(Widgets.row([txt, Widgets.button("Accept", func(): Game.accept_mission(qid), p["quests"]["active"].size() < Quests.MAX_ACTIVE, true, 13)]))
+		box.add_child(HSeparator.new())
+
+
+func _treasury(box: VBoxContainer) -> void:
+	var p := Game.p
+	box.add_child(Widgets.rich("Clan contribution: [color=#ffd76b][b]%d[/b][/color]  -  Earn it through missions and by defending the village from beast tides." % p["contrib"], 13))
+	for e in Quests.TREASURY:
+		var nm: String
+		var desc: String
+		var icon: Control = Control.new()
+		if e["kind"] == "gu":
+			var d: Dictionary = GuDB.GU[e["id"]]
+			nm = "%s  [color=%s]R%d %s[/color]" % [d["name"], Widgets.hex(GuDB.color_of(e["id"])), d["rank"], GuDB.PATH_NAMES[d["path"]]]
+			desc = d["desc"]
+			icon = Widgets.GuIcon.new(e["id"])
+		else:
+			nm = e["name"]
+			desc = e["desc"]
+		var txt := Widgets.rich("[b]%s[/b]\n[color=#a69f8f]%s[/color]" % [nm, desc], 13)
+		txt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var eid: String = e["id"]
+		box.add_child(Widgets.row([icon, txt, Widgets.button("%d contribution" % e["cost"], func(): Game.buy_treasury(eid), p["contrib"] >= e["cost"], true, 13)]))
+		box.add_child(HSeparator.new())
+
+
+func _cultivate(box: VBoxContainer) -> void:
 	var p := Game.p
 	var cost := Game.cultivation_cost()
 	box.add_child(Widgets.rich("[b]%s %s[/b]  -  Grade %s aptitude (%d%%)" % [Aperture.RANK_NAMES[p["rank"]], Aperture.STAGE_NAMES[p["stage"]], Game.grade_of(p["aptitude"]), roundi(p["aptitude"] * 100)], 15))
@@ -313,6 +378,9 @@ func _help(box: VBoxContainer) -> void:
 		"[b]Survival[/b]: watch Hunger. Night is dark and dangerous; build a campfire (Refine panel) and cook meat.",
 		"[b]Primeval stones[/b] are money and essence. Tap Absorb or press Q to restore essence mid-fight.",
 		"[b]Cultivate[/b] with the Clan Elder to rank up. Use the caravan to reach Shang Clan City for rarer Gu.",
+		"[b]Clan missions[/b]: the village elder posts hunts, deliveries and scouting jobs. They pay stones and [b]clan contribution[/b], which buys rare Gu and pills in the Clan Treasury.",
+		"[b]Beast tides[/b]: every 5th night beasts storm Shi Lan Village. Clan guards hold the corners; every beast you slay earns stones and contribution at dawn.",
+		"[b]Enslavement path[/b]: the Wolf Enslavement Gu binds a wolf that fights beside you and returns after it falls.",
 		"[b]Regional Walls[/b] seal the Southern Border on the north, west and east. Mortals cannot pass.",
 		"The [b]Myriad Beast Mire[/b] (southwest) is forbidden ground ruled by a Beast King. The [b]ruins[/b] (northwest) hide an inheritance.",
 		"[color=#a69f8f]Keys: E/Space interact - Tab aperture - B bag - C refine - M map - Q absorb - R rotate - Esc close[/color]",
