@@ -94,8 +94,8 @@ const GU := {
 	"spark": {
 		"name": "Spark Gu", "path": "fire", "rank": 1, "role": "attack",
 		"shape": [Vector2i(0, 0)], "food": "wood", "feed_every": 2, "price": 30,
-		"desc": "Flicks fast embers at the nearest foe. Weak, but very quick.",
-		"attack": {"kind": "projectile", "damage": 5.0, "cooldown": 0.45, "range": 200.0, "cost": 0.8, "speed": 520.0, "size": 4.0, "color": "#ffb36b"},
+		"desc": "Flicks fast embers at the nearest foe. Weak, but very quick, and the embers burn.",
+		"attack": {"kind": "projectile", "damage": 5.0, "cooldown": 0.45, "range": 200.0, "cost": 0.8, "speed": 520.0, "size": 4.0, "burn": 0.4, "color": "#ffb36b"},
 	},
 	"bronze_skin": {
 		"name": "Bronze Skin Gu", "path": "metal", "rank": 1, "role": "defense",
@@ -119,14 +119,14 @@ const GU := {
 	"thunder_bead": {
 		"name": "Thunder Bead Gu", "path": "lightning", "rank": 2, "role": "attack",
 		"shape": [Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1)], "food": "thunder_crystal", "feed_every": 4, "price": 170,
-		"desc": "Lightning leaps between up to 3 enemies.",
-		"attack": {"kind": "chain", "damage": 18.0, "cooldown": 1.8, "range": 230.0, "cost": 4.0, "count": 3, "color": "#e3d0ff"},
+		"desc": "Lightning leaps between up to 3 enemies, sometimes stunning them.",
+		"attack": {"kind": "chain", "damage": 18.0, "cooldown": 1.8, "range": 230.0, "cost": 4.0, "count": 3, "stun": 0.15, "color": "#e3d0ff"},
 	},
 	"fire_ember": {
 		"name": "Fire Ember Gu", "path": "fire", "rank": 2, "role": "attack",
 		"shape": [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(1, 1)], "food": "meat", "feed_every": 2, "price": 150,
-		"desc": "Erupts in a ring of flame around you, burning all nearby foes.",
-		"attack": {"kind": "nova", "damage": 20.0, "cooldown": 2.6, "range": 110.0, "radius": 110.0, "cost": 4.0, "color": "#ff8a4c"},
+		"desc": "Erupts in a ring of flame around you; foes keep burning afterwards.",
+		"attack": {"kind": "nova", "damage": 20.0, "cooldown": 2.6, "range": 110.0, "radius": 110.0, "cost": 4.0, "burn": 0.5, "color": "#ff8a4c"},
 	},
 	"jade_skin": {
 		"name": "White Jade Gu", "path": "earth", "rank": 2, "role": "defense",
@@ -165,6 +165,24 @@ const GU := {
 		"desc": "A crown of thunder that arcs across 5 enemies.",
 		"attack": {"kind": "chain", "damage": 34.0, "cooldown": 2.0, "range": 260.0, "cost": 7.0, "count": 5, "color": "#f0e2ff"},
 	},
+}
+
+## Dao combos: when 2+ pairs of same-path Gu touch in the aperture, that path's effect turns on.
+## "attack" keys apply to attacks of that path; "stats" keys apply globally.
+## Attack effect keys: burn (fraction of hit dealt again over 3s), stun (chance, 0.6s),
+## vulnerable (foe takes +X damage for 3s), pierce_add, count_add (chain jumps).
+const DAO_COMBOS := {
+	"moon": {"name": "Moonlit Edge", "desc": "Moon path attacks pierce one more foe and burn faintly.", "attack": {"pierce_add": 1, "burn": 0.2}},
+	"fire": {"name": "Inferno", "desc": "Fire path attacks set foes ablaze: 60% of each hit burns again over 3s.", "attack": {"burn": 0.6}},
+	"lightning": {"name": "Thunder Chain", "desc": "Lightning attacks jump to one more foe and stun 30% of the time.", "attack": {"count_add": 1, "stun": 0.3}},
+	"water": {"name": "Flowing Tide", "desc": "Water attacks soak foes: they take 20% more damage from everything for 3s.", "attack": {"vulnerable": 0.2}},
+	"wood": {"name": "Verdant Life", "desc": "You heal for 6% of all damage you deal.", "stats": {"lifesteal": 0.06}},
+	"earth": {"name": "Iron Bastion", "desc": "You take 20% less damage.", "stats": {"damage_taken": -0.2}},
+	"strength": {"name": "Blood Frenzy", "desc": "Below half HP, every attack deals +40% damage.", "stats": {"berserk": 0.4}},
+	"metal": {"name": "Blade Storm", "desc": "Every attack has a 20% chance to strike for double damage.", "stats": {"crit": 0.2}},
+	"wind": {"name": "Gale Step", "desc": "+15% move speed, and wind attacks pierce one more foe.", "stats": {"move_speed": 0.15}, "attack": {"pierce_add": 1}},
+	"enslavement": {"name": "Pack Bond", "desc": "Bound beasts bite 40% harder.", "stats": {"summon_damage": 0.4}},
+	"information": {"name": "Far Sight", "desc": "Every attack reaches 20% farther.", "stats": {"range_mult": 0.2}},
 }
 
 ## Killer moves: active when every required Gu is placed AND they form one connected group.

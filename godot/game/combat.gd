@@ -254,7 +254,7 @@ func _fire(a: Dictionary, target: Node) -> void:
 			var r: float = a.get("radius", 100.0)
 			for e in enemies():
 				if e.position.distance_to(origin) < r + e.radius:
-					_hit(e, a["damage"], a.get("slow", 0.0))
+					_hit(e, a["damage"], a)
 					if a.has("knockback"):
 						e.push((e.position - origin).normalized() * a["knockback"] * 3.0)
 			view.fx.add("ring", origin, col, 0.45, {"r": r})
@@ -265,7 +265,7 @@ func _fire(a: Dictionary, target: Node) -> void:
 			for i in a.get("count", 3):
 				if cur == null:
 					break
-				_hit(cur, a["damage"] * (1.0 - i * 0.1), a.get("slow", 0.0))
+				_hit(cur, a["damage"] * (1.0 - i * 0.1), a)
 				view.fx.add("line", from, col, 0.25, {"pos2": cur.position})
 				hit[cur] = true
 				from = cur.position
@@ -276,12 +276,31 @@ func _shoot(a: Dictionary, origin: Vector2, angle: float, col: Color) -> void:
 	var sp: float = a.get("speed", 400.0)
 	projectiles.append({"pos": origin, "vel": Vector2.from_angle(angle) * sp, "damage": a["damage"],
 		"life": a["range"] / sp + 0.1, "size": a.get("size", 6.0), "color": col, "friendly": true,
-		"pierce": a.get("pierce", 0), "slow": a.get("slow", 0.0), "hit": {}})
+		"pierce": a.get("pierce", 0), "slow": a.get("slow", 0.0), "hit": {}, "src": a})
 
 
-func _hit(e: Node, dmg: float, slow: float) -> void:
-	e.take_damage(dmg, slow)
-	view.fx.text(e.position + Vector2(randf_range(-8, 8), -e.radius - 6), str(roundi(dmg)), Color.WHITE, 0.6)
+## Apply a player attack: crits, berserk, status effects, lifesteal. src is the attack spec
+## (may carry slow / burn / stun / vulnerable); guard shots pass an empty dict.
+func _hit(e: Node, dmg: float, src: Dictionary) -> void:
+	var from_player := not src.is_empty()
+	var crit := false
+	if from_player:
+		if Game.p["hp"] < Game.max_hp() * 0.5:
+			dmg *= 1.0 + Game.stat("berserk")
+		if randf() < Game.stat("crit"):
+			dmg *= 2.0
+			crit = true
+	var dealt: float = e.take_damage(dmg, src.get("slow", 0.0))
+	if src.get("burn", 0.0) > 0.0:
+		e.apply_burn(dealt * src["burn"])
+	if src.get("stun", 0.0) > 0.0 and randf() < src["stun"]:
+		e.apply_stun(0.6)
+	if src.get("vulnerable", 0.0) > 0.0:
+		e.apply_vulnerable(src["vulnerable"])
+	if from_player and Game.stat("lifesteal") > 0.0:
+		Game.p["hp"] = minf(Game.max_hp(), Game.p["hp"] + dealt * Game.stat("lifesteal"))
+	var txt := str(roundi(dealt)) + ("!" if crit else "")
+	view.fx.text(e.position + Vector2(randf_range(-8, 8), -e.radius - 6), txt, Color("#ffd76b") if crit else Color.WHITE, 0.6)
 
 
 func _update_projectiles(delta: float) -> void:
@@ -299,7 +318,7 @@ func _update_projectiles(delta: float) -> void:
 				if e.hp <= 0.0 or pr["hit"].has(e):
 					continue
 				if e.position.distance_to(pr["pos"]) < e.radius + pr["size"]:
-					_hit(e, pr["damage"], pr["slow"])
+					_hit(e, pr["damage"], pr.get("src", {}))
 					pr["hit"][e] = true
 					pr["pierce"] -= 1
 					if pr["pierce"] < 0:

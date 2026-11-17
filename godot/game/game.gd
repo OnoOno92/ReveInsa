@@ -630,7 +630,7 @@ func hurt_player(dmg: float, source: String) -> void:
 		var absorbed := minf(shield, d)
 		shield -= absorbed
 		d -= absorbed
-	d = d * 30.0 / (30.0 + stat("armor"))
+	d = d * 30.0 / (30.0 + stat("armor")) * maxf(0.2, 1.0 + stat("damage_taken"))
 	if d <= 0.0:
 		return
 	p["hp"] -= d

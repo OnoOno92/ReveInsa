@@ -53,7 +53,7 @@ explore → gather / hunt → feed Gu, eat → buy / refine Gu → rearrange ape
 - [ ] Clan reputation and multiple clans.
 
 ### v0.25 — Gu depth (ideas carried over from Martial Improved; see `docs/LEGACY_MARTIAL_IMPROVED.md`)
-- [ ] Status effects (burn, bleed, poison, stun) and one Dao combo effect per path, unlocked by 2+ same-path adjacent pairs.
+- [x] Status effects (burn, stun, soaked/vulnerable) and one Dao combo per path (11), unlocked by 2+ touching same-path pairs. Crit, berserk, lifesteal, damage reduction.
 - [ ] Trigger passives (on kill, on hurt, low HP) and named synergy pairs.
 - [ ] Per-drop Gu rolls: potential (power/speed/efficiency/durability), nature, 1/512 shiny.
 - [ ] Wild Gu sightings: timed map markers matched to biome; stand in the zone to capture.

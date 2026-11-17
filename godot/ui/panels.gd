@@ -116,6 +116,24 @@ func _aperture(box: VBoxContainer) -> void:
 		for s in b["synergies"]:
 			box.add_child(Widgets.label("- " + s, 13, UITheme.JADE))
 
+	# Dao combos: show every path you have placed, with pair progress
+	var placed_paths := {}
+	for pl in p["placed"]:
+		placed_paths[GuDB.GU[Aperture.find_inst(p["gu"], pl["uid"])["def"]]["path"]] = true
+	if not placed_paths.is_empty():
+		box.add_child(Widgets.header("Dao Combos"))
+		box.add_child(Widgets.label("Two or more pairs of touching same-path Gu awaken that path's Dao combo.", 12, UITheme.MUTED))
+		var pairs: Dictionary = b.get("path_pairs", {})
+		for path in placed_paths:
+			if not GuDB.DAO_COMBOS.has(path):
+				continue
+			var c: Dictionary = GuDB.DAO_COMBOS[path]
+			var np: int = mini(pairs.get(path, 0), 2)
+			var on := np >= 2
+			box.add_child(Widgets.rich("[color=%s]%s %s[/color] [color=#a69f8f](%s, pairs %d/2)[/color] - %s" % [
+				"#ffe9a8" if on else Widgets.hex(GuDB.path_color(path)), "*" if on else "-", c["name"],
+				GuDB.PATH_NAMES[path], np, c["desc"]], 13))
+
 	box.add_child(Widgets.header("Killer Move Codex"))
 	for km in GuDB.KILLER_MOVES:
 		var active: bool = b["killer_moves"].has(km)

@@ -12,7 +12,8 @@ const STAGE_NAMES := ["Initial Stage", "Middle Stage", "Upper Stage", "Peak Stag
 const ESSENCE_COLORS := ["#ffffff", "#3fae6a", "#c0392b", "#dfe6e9", "#f1c40f", "#8e44ad"]
 const ESSENCE_NAMES := ["", "Green Copper", "Red Steel", "White Silver", "Yellow Gold", "Purple Crystal"]
 const STAT_KEYS := ["armor", "max_hp", "hp_regen", "max_essence", "essence_regen", "move_speed",
-	"damage_mult", "shield", "light_radius", "reveal", "pickup", "summon_count", "summon_damage"]
+	"damage_mult", "shield", "light_radius", "reveal", "pickup", "summon_count", "summon_damage",
+	"lifesteal", "damage_taken", "berserk", "crit", "range_mult"]
 
 
 static func size_for_rank(rank: int) -> int:
@@ -130,7 +131,20 @@ static func _add_stats(into: Dictionary, s: Variant) -> void:
 		into[k] += float(s[k])
 
 
-## Returns {attacks, heals, summons, stats, synergies, killer_moves, inactive}
+## Number of touching same-path Gu pairs per path, e.g. {"moon": 2}.
+static func path_pairs(size: int, active: Array, gu: Array) -> Dictionary:
+	var adj := adjacency(size, active, gu)
+	var pairs := {}
+	for u in adj:
+		for v in adj[u]:
+			if u < v:
+				var pu: String = def_of(gu, u)["path"]
+				if pu == def_of(gu, v)["path"]:
+					pairs[pu] = pairs.get(pu, 0) + 1
+	return pairs
+
+
+## Returns {attacks, heals, summons, stats, synergies, killer_moves, combos, path_pairs, inactive}
 static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 	var size := size_for_rank(rank)
 	var stats := empty_stats()
@@ -150,6 +164,16 @@ static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 	for p in active:
 		_add_stats(stats, def_of(gu, p["uid"]).get("stats"))
 
+	# Dao combos (2+ touching same-path pairs)
+	var pairs := path_pairs(size, active, gu)
+	var combos: Array = []
+	for path in pairs:
+		if pairs[path] >= 2 and GuDB.DAO_COMBOS.has(path):
+			var c: Dictionary = GuDB.DAO_COMBOS[path].duplicate()
+			c["path"] = path
+			combos.append(c)
+			_add_stats(stats, c.get("stats"))
+
 	var attacks: Array = []
 	var heals: Array = []
 	for p in active:
@@ -165,7 +189,11 @@ static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 		var a: Dictionary = d["attack"].duplicate()
 		a["key"] = "a%d" % uid
 		a["name"] = d["name"]
+		a["path"] = d["path"]
 		a["is_killer"] = false
+		for c in combos:
+			if c["path"] == d["path"] and c.has("attack"):
+				_apply_attack_effects(a, c["attack"])
 		var dmg_mult := 1.0
 		var cd_mult := 1.0
 		var cost_mult := 1.0
@@ -232,6 +260,9 @@ static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 
 	for a in attacks:
 		a["damage"] = a["damage"] * (1.0 + stats["damage_mult"])
+		a["range"] = a["range"] * (1.0 + stats["range_mult"])
+		if a.has("radius"):
+			a["radius"] = a["radius"] * (1.0 + stats["range_mult"])
 
 	# Summons (enslavement path): one entry per summoning Gu; killer moves can add more.
 	var summons: Array = []
@@ -244,4 +275,14 @@ static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 			s["damage"] = s["damage"] * (1.0 + stats["summon_damage"] + stats["damage_mult"])
 			summons.append(s)
 	return {"attacks": attacks, "heals": heals, "summons": summons, "stats": stats, "synergies": synergies,
-		"killer_moves": killer_moves, "inactive": inactive}
+		"killer_moves": killer_moves, "combos": combos, "path_pairs": pairs, "inactive": inactive}
+
+
+static func _apply_attack_effects(a: Dictionary, fx: Dictionary) -> void:
+	for k in fx:
+		match k:
+			"pierce_add": a["pierce"] = a.get("pierce", 0) + fx[k]
+			"count_add":
+				if a["kind"] == "chain" or a["kind"] == "fan":
+					a["count"] = a.get("count", 1) + fx[k]
+			_: a[k] = maxf(a.get(k, 0.0), fx[k])
