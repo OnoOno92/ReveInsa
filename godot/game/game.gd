@@ -765,6 +765,7 @@ func end_tribulation(success: bool, reason := "") -> void:
 		rebuild()
 		p["hp"] = max_hp()
 		p["essence"] = max_essence()
+		log_event("You weathered the %s and broke through to Rank %d." % [tribulation_theme()["name"], p["rank"]])
 		toast.emit("You weathered the tribulation! Rank %d - your essence becomes %s. +%d stones%s" % [
 			p["rank"], Aperture.ESSENCE_NAMES[p["rank"]], reward, " (flawless!)" if flawless else "."], "gold")
 	else:
@@ -1333,6 +1334,7 @@ func _nemesis_new_day() -> void:
 		if day() >= Nemesis.EMERGE_DAY:
 			nemesis = Nemesis.create(world.seed_value, p["rank"], WorldData.poi_center("ruins"))
 			toast.emit("Word spreads of your awakening. A demonic Gu Master, %s, has taken notice - he too hunts the Nameless Inheritance." % Nemesis.full_name(nemesis), "bad")
+			log_event("%s took notice of you." % Nemesis.full_name(nemesis))
 		return
 	if not nemesis["alive"]:
 		if time >= nemesis["respawn_day"]:
@@ -1410,6 +1412,7 @@ func nemesis_defeated() -> void:
 		var got := add_gu(prize, false, "inherit")
 		prize = "%s (%s)" % [GuDB.GU[prize]["name"], GuRoll.summary(got)]
 	toast.emit("%s falls! +%d stones, a Demon Core%s. But demonic cultivators rarely stay dead..." % [nemesis["name"], stones, (" and his " + prize) if prize != "" else ""], "gold")
+	log_event("You defeated your nemesis, %s." % nemesis["name"])
 	changed.emit(); save_game()
 
 func nemesis_escaped(at: Vector2) -> void:

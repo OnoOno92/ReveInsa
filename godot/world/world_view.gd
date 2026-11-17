@@ -222,13 +222,17 @@ func _update_people_presence() -> void:
 			person_actors.erase(id)
 			Game.people_present.erase(id)
 			a = null
+		var is_companion: bool = int(Game.p.get("companion", {}).get("id", -1)) == id
 		if a != null:
 			if a.has_meta("person_id"):
 				pp["pos"] = a.position # hostile actors move on their own
-			if not pp["alive"] or (pp["pos"] as Vector2).distance_to(ppos) > People.LEAVE_RADIUS:
+			if not pp["alive"] or is_companion or (pp["pos"] as Vector2).distance_to(ppos) > People.LEAVE_RADIUS:
 				a.queue_free()
 				person_actors.erase(id)
 				Game.people_present.erase(id)
+			continue
+		if is_companion:
+			pp["pos"] = ppos # travelling with you (drawn by the companion ally)
 			continue
 		if not pp["alive"] or Game.in_tribulation or id == Game.duel_id:
 			continue

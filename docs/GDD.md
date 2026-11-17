@@ -63,7 +63,7 @@ explore → gather / hunt → feed Gu, eat → buy / refine Gu → rearrange ape
 - [x] Trigger passives on 12 Gu (opening strike, on kill stacks/heal/essence, when hit shove/slow/shield, below 35% HP) and 8 named pairs. v0.25 complete.
 
 ### v0.3 — Living world
-- Roaming NPC Gu Masters on one unified NPC schema (clan guards are NPCs too), with a world event log.
+- [x] People of the Southern Border: 8 named NPC Gu Masters on one schema (clan, Shang merchants, rogues, demonic), simulated off-screen (travel, growth, captures, clashes, deaths, newcomers), World Chronicle, talk (news, gifts, merchant wares, friendly duels, travelling companion).
 - Seasons and calendar events (Spirit Spring, Ancient Grotto) with warnings.
 - Inheritance-ruin interiors (Formation Lock, Guardian Spirit, Poison Fog rooms; Remnant Will bosses).
 - More villages and clans with their own reputation and shops. Clan wars.

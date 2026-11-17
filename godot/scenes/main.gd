@@ -3,6 +3,7 @@ extends Node
 ## Debug/screenshot args (via tools/godot.sh shot ... -- --autostart=1 ...):
 ##   --autostart=1 --seed=N --night=1 --at=ruins|city|forbidden|wild --enemies=N
 ##   --give=moon_glow,liquor_worm --rank=2 --panel=aperture|bag|craft|shop|elder|map|help --tab=missions
+##   --people=1 [--days=6] [--companion=1] (people near you, some history, a companion)
 ##   --nemesis=1 [--grudge=80] [--far=1] (the nemesis confronts you / is roaming far away)
 ##   --trib=1 [--trib_t=45] [--autopilot=1 --time_scale=4 --quit_after=40] (balance sims, run headless)
 ##   --trib=1 [--trib_t=45] (start the breakthrough tribulation, optionally fast-forwarded)
@@ -112,6 +113,20 @@ func _apply_debug_after(args: Dictionary) -> void:
 		var off := Vector2(0, -30) if args.has("in") else Vector2(160, -60)
 		Game.spawn_sighting(args["sighting"], Game.p["pos"] + off)
 		Game.spawn_sighting() # plus a random rumour elsewhere
+	if args.has("people"):
+		# --people=1: a clan member and a merchant walk up to you; a few days of history
+		Game.advance_time(float(args.get("days", "0")))
+		var off := [Vector2(90, -20), Vector2(-90, 10)]
+		var i := 0
+		for aff in ["clan", "shang"]:
+			var pp: Dictionary = Game.people.filter(func(q): return q["affiliation"] == aff and q["alive"])[0]
+			pp["pos"] = Game.p["pos"] + off[i]
+			pp["target"] = pp["pos"]
+			i += 1
+		if args.has("companion"):
+			var c: Dictionary = Game.people.filter(func(q): return q["affiliation"] == "clan" and q["alive"])[0]
+			c["favor"] = 50.0
+			Game.recruit(c["id"])
 	if args.has("nemesis"):
 		# --nemesis=1: the nemesis emerges, hunting you, and is about to step out of the trees
 		if Game.nemesis.is_empty():
@@ -136,7 +151,8 @@ func _apply_debug_after(args: Dictionary) -> void:
 		get_tree().create_timer(float(args["quit_after"]), true, false, true).timeout.connect(get_tree().quit)
 	if args.has("panel") and hud:
 		hud.open_panel(args["panel"], {"shop": args.get("shop", "village"), "tab": args.get("tab", "gu"), "dest": "city", "clan": true,
-			"plot": Game.add_plot(Game.p["pos"] + Vector2(-70, 10))["id"] if args["panel"] == "plot" else -1})
+			"plot": Game.add_plot(Game.p["pos"] + Vector2(-70, 10))["id"] if args["panel"] == "plot" else -1,
+			"id": Game.people.filter(func(q): return q["affiliation"] == args.get("who", "shang") and q["alive"])[0]["id"] if args["panel"] == "person" else -1})
 	_report = args.has("report")
 	if _report:
 		get_tree().create_timer(float(args.get("report_at", "5"))).timeout.connect(func():
