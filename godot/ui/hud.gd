@@ -191,6 +191,7 @@ func _ready() -> void:
 	Game.changed.connect(_on_changed)
 	Game.npc_interact.connect(_on_npc)
 	Game.plot_interact.connect(func(pl): open_panel("plot", {"plot": pl["id"]}))
+	Game.person_interact.connect(func(pp): open_panel("person", {"id": pp["id"]}))
 	minimap.refresh()
 
 

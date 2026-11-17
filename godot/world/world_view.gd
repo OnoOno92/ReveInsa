@@ -8,6 +8,7 @@ const FxScript := preload("res://game/fx.gd")
 const PickupsScript := preload("res://game/pickups.gd")
 const SightingLayerScript := preload("res://world/sighting_layer.gd")
 const TribulationScript := preload("res://game/tribulation.gd")
+const WandererScript := preload("res://actors/wanderer.gd")
 const CHUNK_TILES := 16
 
 var ground: TileMapLayer
@@ -181,6 +182,7 @@ func _process(delta: float) -> void:
 	_chunk_t -= delta
 	if _chunk_t <= 0.0:
 		_chunk_t = 0.5
+		_update_people_presence()
 		_update_chunks()
 		_sync_campfires()
 	_reveal_t -= delta
@@ -208,6 +210,49 @@ func _wall_check(delta: float) -> void:
 
 
 # ------------------------------------------------------------------ interaction
+var person_actors := {} # person id -> Node (wanderer or enemy)
+
+## People near the player become actors; far ones return to the abstract simulation.
+func _update_people_presence() -> void:
+	var ppos: Vector2 = Game.p["pos"]
+	for pp in Game.people:
+		var id: int = pp["id"]
+		var a: Node = person_actors.get(id)
+		if a != null and not is_instance_valid(a):
+			person_actors.erase(id)
+			Game.people_present.erase(id)
+			a = null
+		if a != null:
+			if a.has_meta("person_id"):
+				pp["pos"] = a.position # hostile actors move on their own
+			if not pp["alive"] or (pp["pos"] as Vector2).distance_to(ppos) > People.LEAVE_RADIUS:
+				a.queue_free()
+				person_actors.erase(id)
+				Game.people_present.erase(id)
+			continue
+		if not pp["alive"] or Game.in_tribulation or id == Game.duel_id:
+			continue
+		if (pp["pos"] as Vector2).distance_to(ppos) > People.MEET_RADIUS:
+			continue
+		if People.is_hostile(pp):
+			if Game.world.is_safe(pp["pos"]):
+				continue
+			a = combat.spawn("demonic_master", pp["pos"])
+			var st := People.combat_stats(pp)
+			a.max_hp = st["hp"]; a.hp = a.max_hp; a.dmg_scale = st["dmg_scale"]
+			a.display_name = pp["name"]
+			a.set_meta("person_id", id)
+		else:
+			a = WandererScript.new()
+			a.setup(pp)
+			entities.add_child(a)
+		if not pp["met"]:
+			pp["met"] = true
+			Game.log_event("You met %s, a %s." % [pp["name"], People.AFFILIATION_NAMES[pp["affiliation"]].to_lower()])
+		person_actors[id] = a
+		Game.people_present[id] = true
+
+
 func _find_interactable() -> void:
 	var ppos: Vector2 = Game.p["pos"]
 	var best := {}
@@ -219,6 +264,12 @@ func _find_interactable() -> void:
 				best_d = d
 				var role: String = prop.data["role"]
 				best = {"kind": "npc", "prop": prop, "label": {"merchant": "Trade", "elder": "Cultivate", "caravan": "Travel"}[role]}
+	for a in person_actors.values():
+		if is_instance_valid(a) and a.get("kind") == "person":
+			var d: float = a.position.distance_squared_to(ppos)
+			if d < best_d:
+				best_d = d
+				best = {"kind": "person", "prop": a, "label": "Talk"}
 	if best.is_empty():
 		var candidates: Array = []
 		for n in Game.world.nodes_near(ppos, 52.0):
@@ -276,6 +327,8 @@ func do_action() -> void:
 			Game.toast.emit(prop.data["text"], "info")
 		"node":
 			_gather(prop)
+		"person":
+			Game.person_interact.emit(prop.data)
 		"plot":
 			var pl: Dictionary = prop.data
 			match interact["label"]:

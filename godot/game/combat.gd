@@ -22,6 +22,28 @@ func enemies() -> Array:
 func _ready() -> void:
 	Game.nemesis_engage.connect(_on_nemesis_engage)
 	Game.passive_burst.connect(_on_passive_burst)
+	Game.duel_started.connect(_on_duel_started)
+
+
+## A friendly duel: the opponent fights for real but yields at 20% HP.
+func _on_duel_started(pp: Dictionary) -> void:
+	var old: Node = view.person_actors.get(pp["id"])
+	var at: Vector2 = pp["pos"]
+	if old and is_instance_valid(old):
+		at = old.position
+		old.queue_free()
+		view.person_actors.erase(pp["id"])
+		Game.people_present.erase(pp["id"])
+	var e: Node = spawn("demonic_master", at)
+	var st := People.combat_stats(pp)
+	e.max_hp = st["hp"]; e.hp = e.max_hp; e.dmg_scale = st["dmg_scale"] * 0.8
+	e.display_name = pp["name"]
+	e.tint = Color(People.AFFILIATION_COLORS[pp["affiliation"]]).darkened(0.2)
+	e.aggro = true
+	e.set_meta("duel", pp["id"])
+	Game.duel_ended.connect(func(_pp, _won):
+		if is_instance_valid(e):
+			e.queue_free(), CONNECT_ONE_SHOT)
 
 
 ## When-hit passives that reach out to nearby enemies.
@@ -123,6 +145,10 @@ func _physics_process(delta: float) -> void:
 	_update_projectiles(delta)
 	for e in enemies():
 		if e.hp <= 0.0 and not e.is_queued_for_deletion():
+			if e.has_meta("duel"): # burn ticks or wolf bites: a duel still ends in a yield
+				e.hp = 1.0
+				Game.end_duel(true)
+				continue
 			_kill(e)
 	queue_redraw()
 
@@ -189,6 +215,28 @@ func _spawn_raiders() -> void:
 
 
 # ------------------------------------------------------------------ summons
+## A person travelling with you (Game.p.companion).
+func _update_companion() -> void:
+	var have := allies().filter(func(a): return a.mode == "companion")
+	var want: Dictionary = Game.p.get("companion", {})
+	var pp: Dictionary = Game.find_person(int(want.get("id", -1))) if not want.is_empty() else {}
+	if pp.is_empty() or not pp["alive"]:
+		for a in have:
+			a.queue_free()
+		return
+	for a in have:
+		if a.hp <= 0.0:
+			Game.toast.emit("%s is badly hurt and limps home." % pp["name"], "bad")
+			Game.p.erase("companion")
+			a.queue_free()
+			return
+	if have.is_empty():
+		var c: CharacterBody2D = AllyScript.new()
+		c.setup_companion(pp, Game.p["pos"] + Vector2(-40, 30))
+		c.shoot.connect(_on_guard_shoot)
+		view.entities.add_child(c)
+
+
 ## Clan guards hold posts around the village heart while a beast tide rages.
 func _update_guards() -> void:
 	var guards := allies().filter(func(a): return a.mode == "guard")
@@ -227,8 +275,9 @@ func _update_allies(delta: float) -> void:
 		want[s["key"]] = s
 	var have := {}
 	_update_guards()
+	_update_companion()
 	for a in allies():
-		if a.mode == "guard":
+		if a.mode == "guard" or a.mode == "companion":
 			continue
 		if a.hp <= 0.0:
 			view.fx.add("burst", a.position, Color("#b9a98c"), 0.5)
@@ -369,6 +418,10 @@ func _hit(e: Node, dmg: float, src: Dictionary) -> void:
 		e.apply_vulnerable(src["vulnerable"])
 	if from_player and Game.stat("lifesteal") > 0.0:
 		Game.p["hp"] = minf(Game.max_hp(), Game.p["hp"] + dealt * Game.stat("lifesteal"))
+	if e.has_meta("duel") and e.hp < e.max_hp * 0.2:
+		e.hp = e.max_hp * 0.2
+		Game.end_duel(true)
+		return
 	if e == nemesis_actor and e.hp > 0.0 and e.hp < e.max_hp * 0.25 and not e.has_meta("escape_rolled"):
 		e.set_meta("escape_rolled", true)
 		if randf() < 0.5:
@@ -431,6 +484,8 @@ func _kill(e: Node) -> void:
 	if e == nemesis_actor:
 		nemesis_actor = null
 		Game.nemesis_defeated()
+	if e.has_meta("person_id"):
+		Game.kill_person(int(e.get_meta("person_id")))
 	view.fx.add("burst", e.position, Color.html(d["color"]), 0.5)
 	if e.is_boss():
 		Game.flags["bear_king_died"] = maxi(1, Game.day())

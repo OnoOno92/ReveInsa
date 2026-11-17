@@ -16,7 +16,7 @@ func _init(h: CanvasLayer) -> void:
 func title(kind: String) -> String:
 	return {
 		"aperture": "Aperture", "bag": "Bag", "craft": "Craft & Gu Refinement", "shop": "Trade",
-		"elder": "Clan Elder", "plot": "Spirit Field", "caravan": "Caravan", "map": "Southern Border", "help": "Gu Master Guide",
+		"elder": "Clan Elder", "plot": "Spirit Field", "caravan": "Caravan", "map": "Southern Border", "person": "Encounter", "help": "Gu Master Guide",
 	}.get(kind, kind)
 
 
@@ -41,7 +41,8 @@ func build(kind: String, box: VBoxContainer, args: Dictionary) -> void:
 		"shop": _shop(box, args)
 		"elder": _elder(box, args)
 		"caravan": _caravan(box, args)
-		"map": _map(box)
+		"map": _map(box, args)
+		"person": _person(box, args)
 		"help": _help(box)
 		"plot": _plot(box, args)
 
@@ -462,7 +463,25 @@ func _caravan(box: VBoxContainer, args: Dictionary) -> void:
 	box.add_child(Widgets.button("Travel to %s" % dest["name"], func(): hud.close_panel(); Game.travel(dest["id"]), Game.p["stones"] >= 15, true, 15))
 
 
-func _map(box: VBoxContainer) -> void:
+func _map(box: VBoxContainer, args: Dictionary) -> void:
+	var tab: String = args.get("tab", "map")
+	if not tab in ["map", "people", "chronicle"]:
+		tab = "map"
+	var tabs: Array = []
+	for t in [["map", "Map"], ["people", "People"], ["chronicle", "Chronicle"]]:
+		var key: String = t[0]
+		tabs.append(Widgets.button(t[1], func(): args["tab"] = key; hud._rebuild_panel(), true, tab == key, 13))
+	box.add_child(Widgets.row(tabs))
+	if tab == "people":
+		_people_list(box)
+		return
+	if tab == "chronicle":
+		box.add_child(Widgets.label("The World Chronicle: what has happened in the Southern Border, newest first.", 13, UITheme.MUTED))
+		var entries: Array = Game.chronicle.duplicate()
+		entries.reverse()
+		for e in entries:
+			box.add_child(Widgets.rich("[color=#d4a93a]Day %d[/color]  %s" % [e["day"], e["text"]], 13))
+		return
 	var m := Widgets.MapView.new(0.0, true)
 	var side := minf(460.0, hud.root.size.y - 140.0)
 	m.custom_minimum_size = Vector2(side, side)
@@ -522,6 +541,66 @@ func _plot(box: VBoxContainer, args: Dictionary) -> void:
 		box.add_child(HSeparator.new())
 
 
+func _people_list(box: VBoxContainer) -> void:
+	box.add_child(Widgets.label("Gu Masters of the Southern Border you have met. Others you know only by rumour.", 13, UITheme.MUTED))
+	for pp in Game.people:
+		var col: String = People.AFFILIATION_COLORS[pp["affiliation"]]
+		if not pp["met"]:
+			box.add_child(Widgets.rich("[color=#a69f8f]? %s - a %s you have not met (Rank %d).[/color]" % [pp["name"], People.AFFILIATION_NAMES[pp["affiliation"]].to_lower(), pp["rank"]], 13))
+			continue
+		var status := "" if pp["alive"] else " [color=#ff6b6b](dead)[/color]"
+		box.add_child(Widgets.rich("[color=%s][b]%s[/b][/color]%s - %s, Rank %d, %s path - [b]%s[/b] (%d)\n[color=#a69f8f]Last seen %s. Carries %s.[/color]" % [
+			col, pp["name"], status, People.AFFILIATION_NAMES[pp["affiliation"]], pp["rank"], GuDB.PATH_NAMES[pp["path"]].trim_suffix(" Path"),
+			People.favor_label(pp["favor"]), roundi(pp["favor"]), Sightings.direction_text(Game.p["pos"], pp["pos"]),
+			", ".join(pp["gu"].map(func(g): return GuDB.GU[g]["name"]).slice(0, 3))], 13))
+
+
+func _person(box: VBoxContainer, args: Dictionary) -> void:
+	var pp := Game.find_person(int(args.get("id", -1)))
+	if pp.is_empty() or not pp["alive"]:
+		box.add_child(Widgets.label("They are gone.", 13, UITheme.MUTED))
+		return
+	var col: String = People.AFFILIATION_COLORS[pp["affiliation"]]
+	box.add_child(Widgets.rich("[color=%s][b]%s[/b][/color] - %s, Rank %d %s Gu Master" % [col, pp["name"], People.AFFILIATION_NAMES[pp["affiliation"]], pp["rank"], GuDB.PATH_NAMES[pp["path"]].trim_suffix(" Path")], 15))
+	var bar := Widgets.StatBar.new(Color(col))
+	bar.custom_minimum_size = Vector2(300, 18)
+	bar.set_values(pp["favor"] + 100.0, 200.0, "Favor: %s (%d)" % [People.favor_label(pp["favor"]), roundi(pp["favor"])])
+	box.add_child(bar)
+	if args.has("said"):
+		box.add_child(Widgets.rich("[i]%s[/i]" % args["said"], 14))
+	var id: int = pp["id"]
+	var btns: Array = [Widgets.button("Ask for news", func(): args["said"] = Game.ask_news(id); hud._rebuild_panel(), true, false, 13)]
+	btns.append(Widgets.button("Gift 10 stones", func(): Game.give_gift(id), Game.p["stones"] >= 10, false, 13))
+	for food in ["rice_ball", "wine", "cooked_meat"]:
+		if Game.count(food) > 0:
+			btns.append(Widgets.button("Gift %s" % ItemDB.ITEMS[food]["name"], func(): Game.give_gift(id, food), true, false, 13))
+			break
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 8)
+	flow.add_theme_constant_override("v_separation", 8)
+	for b in btns:
+		flow.add_child(b)
+	box.add_child(flow)
+	if pp["affiliation"] == "shang" and pp.get("stock", []).size():
+		box.add_child(Widgets.header("Wares"))
+		for item in pp["stock"]:
+			var d: Dictionary = ItemDB.ITEMS[item]
+			var cost := ceili(d["price"] * 2.5)
+			var r := Widgets.rich("[b]%s[/b] (have %d)  [color=#a69f8f]%s[/color]" % [d["name"], Game.count(item), d["desc"]], 13)
+			r.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			box.add_child(Widgets.row([r, Widgets.button("%d stones" % cost, func(): Game.buy_from(id, item), Game.p["stones"] >= cost, true, 13)]))
+	if pp["affiliation"] in ["clan", "rogue"]:
+		box.add_child(Widgets.header("Together"))
+		var why := Game.can_recruit(pp)
+		box.add_child(Widgets.row([
+			Widgets.button("Travel together (1 day)", func(): Game.recruit(id); hud.close_panel(), why == "", true, 13),
+			Widgets.button("Challenge to a duel", func(): hud.close_panel(); Game.start_duel(id), Game.duel_id < 0, false, 13),
+		]))
+		if why != "":
+			box.add_child(Widgets.label(why, 12, UITheme.MUTED))
+		box.add_child(Widgets.label("A duel ends when one of you yields (20% HP). Winning earns stones and respect.", 12, UITheme.MUTED))
+
+
 func _help(box: VBoxContainer) -> void:
 	var lines := [
 		"[b]Move[/b] with WASD or by dragging on the left half of the screen. Your Gu attack [b]automatically[/b] when enemies are in range, consuming primeval essence.",
@@ -532,6 +611,7 @@ func _help(box: VBoxContainer) -> void:
 		"[b]Feeding[/b]: every Gu eats a specific food every few days at dawn. Hungry Gu stop working; 3 days later they die.",
 		"[b]Survival[/b]: watch Hunger. Night is dark and dangerous; build a campfire (Refine panel) and cook meat.",
 		"[b]Primeval stones[/b] are money and essence. Tap Absorb or press Q to restore essence mid-fight.",
+		"[b]People[/b]: named Gu Masters live in the Southern Border - clan members, Shang merchants, rogues and demonic cultivators. Talk to them for news, gifts, trade, duels, or (once friendly) a travelling companion. The map's People and Chronicle tabs track them and everything that happens.",
 		"[b]Nemesis[/b]: a demonic Gu Master takes an interest in you on Day 2. His grudge grows each day, when you kill demonic cultivators, and if you claim the inheritance. A rival burns your fields; a hunter comes for you. Beaten, he may flee with a Blood Escape Gu, and he always returns stronger. Check the map for his last known position.",
 		"[b]Tribulations[/b]: when Peak Stage is full, face a tribulation from the Clan Elder. Dodge Heaven's strikes and destroy the Calamity Avatar to break through. Failing causes a day of qi deviation.",
 		"[b]Cultivate[/b] with the Clan Elder to rank up. Use the caravan to reach Shang Clan City for rarer Gu.",

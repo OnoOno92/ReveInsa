@@ -29,6 +29,22 @@ func setup(spec: Dictionary, index: int, pos: Vector2) -> void:
 	_offset = Vector2.from_angle(index * 2.1 + 0.6) * 46.0
 
 
+## A person travelling with you: follows like a beast, fights like a guard.
+var person_name := ""
+func setup_companion(pp: Dictionary, pos: Vector2) -> void:
+	mode = "companion"
+	key = "companion"
+	person_name = pp["name"]
+	var st := People.combat_stats(pp)
+	max_hp = st["hp"]
+	hp = max_hp
+	damage = 7.0 * st["dmg_scale"]
+	speed = 160.0
+	position = pos
+	_offset = Vector2(-40, 30)
+	set_meta("color", People.AFFILIATION_COLORS[pp["affiliation"]])
+
+
 func setup_guard(at: Vector2) -> void:
 	mode = "guard"
 	key = "guard"
@@ -61,6 +77,9 @@ func _physics_process(delta: float) -> void:
 	if mode == "guard":
 		_guard_process(delta)
 		return
+	if mode == "companion":
+		_companion_process(delta)
+		return
 	_t += delta
 	atk_t -= delta
 	flash = maxf(0.0, flash - delta)
@@ -88,6 +107,29 @@ func _physics_process(delta: float) -> void:
 	queue_redraw()
 
 
+func _companion_process(delta: float) -> void:
+	_t += delta
+	atk_t -= delta
+	flash = maxf(0.0, flash - delta)
+	var ppos: Vector2 = Game.p["pos"]
+	var target: Node2D = null
+	var best := 270.0 * 270.0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var d: float = e.position.distance_squared_to(position)
+		if e.hp > 0.0 and d < best and not e.has_meta("duel"):
+			best = d
+			target = e
+	if target and atk_t <= 0.0:
+		atk_t = 1.0
+		shoot.emit(position, (target.position - position).normalized())
+	if position.distance_to(ppos) > 700.0:
+		position = ppos + _offset
+	var to := ppos + _offset - position
+	velocity = Vector2.ZERO if to.length() < 10.0 else to.normalized() * speed * (1.0 if to.length() > 60.0 else 0.5)
+	move_and_slide()
+	queue_redraw()
+
+
 func _guard_process(delta: float) -> void:
 	atk_t -= delta
 	flash = maxf(0.0, flash - delta)
@@ -108,7 +150,7 @@ func _guard_process(delta: float) -> void:
 
 
 func _draw() -> void:
-	if mode == "guard":
+	if mode == "guard" or mode == "companion":
 		_draw_guard()
 		return
 	var r := radius
@@ -134,7 +176,7 @@ func _draw_guard() -> void:
 	draw_set_transform(Vector2(0, 8), 0, Vector2(1, 0.4))
 	draw_circle(Vector2.ZERO, 11, Color(0, 0, 0, 0.3))
 	draw_set_transform(Vector2.ZERO)
-	var robe := Color.WHITE if flash > 0.0 else Color("#3d6a8a")
+	var robe := Color.WHITE if flash > 0.0 else Color(get_meta("color", "#3d6a8a")).darkened(0.2)
 	draw_colored_polygon(PackedVector2Array([Vector2(-9, 7), Vector2(9, 7), Vector2(6, -10), Vector2(-6, -10)]), robe)
 	draw_rect(Rect2(-7, -2, 14, 3), Color("#9ecbff"))
 	draw_circle(Vector2(0, -15), 6, Color("#f1d6b8"))
@@ -142,3 +184,8 @@ func _draw_guard() -> void:
 	if hp < max_hp:
 		draw_rect(Rect2(-14, -30, 28, 3), Color(0, 0, 0, 0.6))
 		draw_rect(Rect2(-14, -30, 28 * maxf(0.0, hp / max_hp), 3), Color("#7cfc8a"))
+
+	if person_name != "":
+		var f := ThemeDB.fallback_font
+		draw_string_outline(f, Vector2(-80, -34), person_name, HORIZONTAL_ALIGNMENT_CENTER, 160, 11, 3, Color(0, 0, 0, 0.8))
+		draw_string(f, Vector2(-80, -34), person_name, HORIZONTAL_ALIGNMENT_CENTER, 160, 11, Color("#c8f0d8"))

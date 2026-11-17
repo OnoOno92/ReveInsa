@@ -15,6 +15,9 @@ signal tribulation_started(theme: Dictionary, arena: Vector2)
 signal nemesis_engage(nemesis: Dictionary)
 ## A when-hit passive fired that affects enemies around the player (shove / slow).
 signal passive_burst(passive: Dictionary)
+signal person_interact(person: Dictionary)
+signal duel_started(person: Dictionary)
+signal duel_ended(person: Dictionary, won: bool)
 signal tribulation_ended(success: bool)
 
 var save_path := "user://save_v1.json"
@@ -34,6 +37,11 @@ var plots: Array = []
 var passive_stacks := {}
 var _passive_cd := {}
 var _low_hp := false
+## The people of the Southern Border (see game/people.gd) and the World Chronicle.
+var people: Array = []
+var chronicle: Array = [] # {day, text}
+var people_present := {} # person id -> true while their actor walks the world
+var duel_id := -1
 ## The nemesis (see game/nemesis.gd); empty until he emerges.
 var nemesis: Dictionary = {}
 var nemesis_present := false # his actor is in the world right now
@@ -88,6 +96,11 @@ func new_game(player_name: String, world_seed := -1) -> Dictionary:
 	_sight_t = 12.0
 	nemesis = {}
 	nemesis_present = false
+	people = People.generate(rng, 1)
+	chronicle = []
+	people_present = {}
+	duel_id = -1
+	log_event("Your aperture opens in Shi Lan Village. Your story begins.")
 	plots = []
 	# Shi Lan Village keeps two fields behind the elder's house for you
 	var vc := WorldData.poi_center("village")
@@ -121,6 +134,12 @@ func save_game() -> void:
 		"v": 1, "seed": world.seed_value, "time": time, "player": pd, "flags": flags,
 		"depleted": depleted, "campfires": fires, "explored": Marshalls.raw_to_base64(world.explored),
 		"nemesis": _nemesis_to_save(),
+		"people": people.map(func(pp):
+			var c: Dictionary = pp.duplicate(true)
+			c["pos"] = [pp["pos"].x, pp["pos"].y]
+			c["target"] = [pp["target"].x, pp["target"].y]
+			return c),
+		"chronicle": chronicle,
 		"plots": plots.map(func(pl):
 			var c: Dictionary = pl.duplicate()
 			c["pos"] = [pl["pos"].x, pl["pos"].y]
@@ -183,6 +202,20 @@ func load_game() -> bool:
 			n["regrow_day"] = float(d[1]); n["hp"] = int(d[2])
 	nemesis = _nemesis_from_save(data.get("nemesis", {}))
 	nemesis_present = false
+	people_present = {}
+	duel_id = -1
+	chronicle = data.get("chronicle", [])
+	people = []
+	for pp in data.get("people", []):
+		var q: Dictionary = pp.duplicate(true)
+		q["pos"] = Vector2(pp["pos"][0], pp["pos"][1])
+		q["target"] = Vector2(pp["target"][0], pp["target"][1])
+		for k in ["id", "rank"]:
+			q[k] = int(q[k])
+		q["favor"] = float(q["favor"]); q["power"] = float(q["power"])
+		people.append(q)
+	if people.is_empty(): # saves from before the living world
+		people = People.generate(rng, p["rank"])
 	plots = []
 	if not data.has("plots"): # saves from before spirit fields: grant the village fields
 		var vc := WorldData.poi_center("village")
@@ -796,6 +829,7 @@ func _on_new_day() -> void:
 				lines.append("%s is starving (needs %s)." % [d["name"], ItemDB.ITEMS[d["food"]]["name"]])
 	_tide_reward()
 	_nemesis_new_day()
+	_people_new_day()
 	refill_missions()
 	rebuild()
 	toast.emit("Day %d dawns." % (day() + 1), "gold")
@@ -972,6 +1006,7 @@ func tick(delta: float) -> void:
 	_expire_buffs()
 	_update_sightings(delta)
 	_update_nemesis(delta)
+	_update_people(delta)
 	_update_passives()
 	if p["hp"] <= 0.0:
 		die("You starved.")
@@ -1080,6 +1115,195 @@ func _trample_fields() -> void:
 		if pl["crop"] != "" and pl["growth"] < 1.0 and rng.randf() < 0.25:
 			toast.emit("Raiders trampled your %s field!" % ItemDB.ITEMS[pl["crop"]]["name"], "bad")
 			_clear_plot(pl)
+
+
+# ------------------------------------------------------------------ people & chronicle
+func log_event(text: String, notable := false) -> void:
+	chronicle.append({"day": day() + 1, "text": text})
+	while chronicle.size() > People.CHRONICLE_MAX:
+		chronicle.pop_front()
+	if notable:
+		toast.emit(text, "info")
+
+func find_person(id: int) -> Dictionary:
+	for pp in people:
+		if pp["id"] == id:
+			return pp
+	return {}
+
+func _people_new_day() -> void:
+	var notable := 0
+	var alive := people.filter(func(pp): return pp["alive"])
+	for pp in alive:
+		pp["power"] *= rng.randf_range(1.02, 1.05)
+		if pp["rank"] < 5 and pp["power"] > 1.0 + 0.3 * pp["rank"] and rng.randf() < 0.5:
+			pp["rank"] += 1
+			pp["power"] = 1.0
+			log_event("%s broke through to Rank %d." % [pp["name"], pp["rank"]], notable < 2)
+			notable += 1
+		pp["goal"] = People.pick_goal(rng, pp)
+		pp["target"] = People.pick_target(rng, world, pp)
+		if rng.randf() < 0.12:
+			var pool: Array = Nemesis.ARSENAL.get(pp["path"], ["moonlight"])
+			var g: String = pool[rng.randi() % pool.size()]
+			pp["gu"].append(g)
+			log_event("%s captured a wild %s." % [pp["name"], GuDB.GU[g]["name"]])
+		var risk := {"hunt": 0.04, "gather": 0.015}.get(pp["goal"], 0.0) as float
+		if pp["affiliation"] != "shang" and rng.randf() < risk and not people_present.has(pp["id"]):
+			pp["alive"] = false
+			pp["died"] = day()
+			log_event("%s went hunting in the wilds and never returned." % pp["name"], notable < 2)
+			notable += 1
+	# Demonic and righteous cultivators clash
+	var demons := alive.filter(func(pp): return pp["alive"] and pp["affiliation"] == "demonic")
+	var others := alive.filter(func(pp): return pp["alive"] and pp["affiliation"] != "demonic" and pp["affiliation"] != "shang")
+	if demons.size() and others.size() and rng.randf() < 0.15:
+		var a: Dictionary = demons[rng.randi() % demons.size()]
+		var b: Dictionary = others[rng.randi() % others.size()]
+		var a_wins: bool = a["rank"] * a["power"] * rng.randf_range(0.7, 1.3) > b["rank"] * b["power"] * rng.randf_range(0.7, 1.3)
+		var winner: Dictionary = a if a_wins else b
+		var loser: Dictionary = b if a_wins else a
+		if rng.randf() < 0.3 and not people_present.has(loser["id"]):
+			loser["alive"] = false
+			loser["died"] = day()
+			log_event("%s slew %s in a duel to the death." % [winner["name"], loser["name"]], notable < 2)
+		else:
+			log_event("%s defeated %s in a clash of Gu; the loser fled wounded." % [winner["name"], loser["name"]])
+		notable += 1
+	# Newcomers replace the fallen after two days
+	for pp in people:
+		if not pp["alive"] and day() - int(pp.get("died", 0)) >= 2 and not pp.get("replaced", false):
+			pp["replaced"] = true
+			flags["person_id"] = int(flags.get("person_id", 100)) + 1
+			var taken := {}
+			for q in people:
+				taken[q["name"]] = true
+			var nw := People.make(rng, flags["person_id"], pp["affiliation"], p["rank"], taken)
+			people.append(nw)
+			log_event("A newcomer arrives in the Southern Border: %s, a %s." % [nw["name"], People.AFFILIATION_NAMES[nw["affiliation"]].to_lower()])
+	people = people.filter(func(pp): return pp["alive"] or not pp.get("replaced", false) or day() - int(pp.get("died", 0)) < 6)
+
+func _update_people(delta: float) -> void:
+	var speed := People.SPEED_TILES_PER_DAY * WorldData.TILE / DAY_SECONDS
+	for pp in people:
+		if not pp["alive"] or people_present.has(pp["id"]):
+			continue
+		var to: Vector2 = pp["target"] - pp["pos"]
+		if to.length() <= speed * delta:
+			pp["pos"] = pp["target"]
+		else:
+			pp["pos"] += to.normalized() * speed * delta
+	if p.has("companion") and p["companion"]["until"] < time:
+		var c := find_person(int(p["companion"]["id"]))
+		p.erase("companion")
+		if not c.is_empty():
+			toast.emit("%s bows and goes their own way." % c["name"], "info")
+
+## News: where to find a Gu sighting, the nemesis, or the person's own plans.
+func ask_news(id: int) -> String:
+	var pp := find_person(id)
+	if pp.is_empty():
+		return ""
+	if not pp.get("news_day", -1) == day():
+		pp["news_day"] = day()
+		pp["favor"] = minf(100.0, pp["favor"] + 1.0)
+	if sightings.size():
+		var sg: Dictionary = sightings[rng.randi() % sightings.size()]
+		return "\"I heard a wild %s was seen %s.\"" % [GuDB.GU[sg["def"]]["name"], Sightings.direction_text(p["pos"], sg["pos"])]
+	if not nemesis.is_empty() and nemesis["alive"]:
+		return "\"Be careful. %s was seen %s, and he is %s.\"" % [nemesis["name"], Sightings.direction_text(p["pos"], nemesis["pos"]),
+			{"emerging": "only watching for now", "rival": "growing bolder", "threat": "hunting someone"}[Nemesis.phase(nemesis)]]
+	return "\"Quiet days. I mean to %s soon.\"" % {"rest": "rest at home", "gather": "gather herbs", "hunt": "hunt in the wilds", "travel": "travel the roads"}[pp["goal"]]
+
+func give_gift(id: int, item := "") -> void:
+	var pp := find_person(id)
+	if pp.is_empty():
+		return
+	if item == "":
+		if p["stones"] < 10:
+			toast.emit("You need 10 primeval stones.", "bad")
+			return
+		p["stones"] -= 10
+		pp["favor"] = minf(100.0, pp["favor"] + 8.0)
+		toast.emit("%s accepts your stones with a nod." % pp["name"], "good")
+	else:
+		if count(item) <= 0:
+			return
+		add_item(item, -1)
+		pp["favor"] = minf(100.0, pp["favor"] + 5.0)
+		toast.emit("%s gladly accepts the %s." % [pp["name"], ItemDB.ITEMS[item]["name"]], "good")
+	changed.emit()
+
+func can_recruit(pp: Dictionary) -> String:
+	if pp["affiliation"] in ["shang", "demonic"]:
+		return "They have their own business."
+	if pp["favor"] < 40.0:
+		return "They don't trust you enough yet (needs Friendly)."
+	if p.has("companion"):
+		return "You already have a travelling companion."
+	return ""
+
+func recruit(id: int) -> void:
+	var pp := find_person(id)
+	if pp.is_empty() or can_recruit(pp) != "":
+		return
+	p["companion"] = {"id": id, "until": time + 1.0}
+	log_event("%s agreed to travel with you for a day." % pp["name"])
+	toast.emit("%s will travel with you until tomorrow." % pp["name"], "good")
+	changed.emit()
+
+func buy_from(id: int, item: String) -> void:
+	var pp := find_person(id)
+	if pp.is_empty() or not item in pp.get("stock", []):
+		return
+	var cost := ceili(ItemDB.ITEMS[item]["price"] * 2.5)
+	if p["stones"] < cost:
+		toast.emit("Not enough primeval stones.", "bad")
+		return
+	p["stones"] -= cost
+	add_item(item, 1)
+	pp["favor"] = minf(100.0, pp["favor"] + 1.0)
+	changed.emit()
+
+func start_duel(id: int) -> void:
+	var pp := find_person(id)
+	if pp.is_empty() or duel_id >= 0 or People.is_hostile(pp) or pp["affiliation"] == "shang":
+		return
+	if world.is_safe(p["pos"]):
+		toast.emit("\"Not here. Meet me outside the walls.\"", "info")
+		return
+	duel_id = id
+	toast.emit("%s accepts your challenge! The duel ends when one of you yields." % pp["name"], "gold")
+	duel_started.emit(pp)
+
+func end_duel(won: bool) -> void:
+	var pp := find_person(duel_id)
+	duel_id = -1
+	if pp.is_empty():
+		return
+	if won:
+		var stones: int = 15 * pp["rank"]
+		p["stones"] += stones
+		pp["favor"] = minf(100.0, pp["favor"] + 10.0)
+		log_event("You defeated %s in a friendly duel." % pp["name"])
+		toast.emit("%s yields! \"Well fought.\" +%d stones, and their respect." % [pp["name"], stones], "gold")
+	else:
+		pp["favor"] = minf(100.0, pp["favor"] + 3.0)
+		log_event("%s bested you in a friendly duel." % pp["name"])
+		toast.emit("You yield to %s. \"Train harder, friend.\"" % pp["name"], "info")
+	duel_ended.emit(pp, won)
+	changed.emit()
+
+func kill_person(id: int) -> void:
+	var pp := find_person(id)
+	if pp.is_empty():
+		return
+	pp["alive"] = false
+	pp["died"] = day()
+	people_present.erase(id)
+	var stones: int = 20 * pp["rank"]
+	p["stones"] += stones
+	log_event("You slew the %s %s." % [People.AFFILIATION_NAMES[pp["affiliation"]].to_lower(), pp["name"]], true)
 
 
 # ------------------------------------------------------------------ nemesis
@@ -1286,6 +1510,10 @@ func hurt_player(dmg: float, source: String) -> void:
 		d -= absorbed
 	d = d * 30.0 / (30.0 + stat("armor")) * maxf(0.2, 1.0 + stat("damage_taken"))
 	if d <= 0.0:
+		return
+	if duel_id >= 0 and p["hp"] - d <= max_hp() * 0.2:
+		p["hp"] = max_hp() * 0.2 # a duel ends at the yield, not at death
+		end_duel(false)
 		return
 	p["hp"] -= d
 	player_hurt.emit(d)
