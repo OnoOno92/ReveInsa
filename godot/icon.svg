@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="60%">
+      <stop offset="0%" stop-color="#2c2440"/>
+      <stop offset="100%" stop-color="#0b0b12"/>
+    </radialGradient>
+    <linearGradient id="worm" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7fe0a0"/>
+      <stop offset="100%" stop-color="#2f8f58"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="48" fill="url(#bg)"/>
+  <circle cx="128" cy="128" r="92" fill="none" stroke="#d4a93a" stroke-width="8"/>
+  <!-- crescent moon blade -->
+  <path d="M88 84 A60 60 0 1 0 176 170 A48 48 0 1 1 88 84 Z" fill="#bfe0ff" opacity="0.9"/>
+  <!-- the Gu: a coiled green-copper worm -->
+  <path d="M96 150 C96 118 140 112 148 134 C154 152 130 160 122 148 C116 138 128 130 136 136"
+        fill="none" stroke="url(#worm)" stroke-width="16" stroke-linecap="round"/>
+  <circle cx="98" cy="152" r="10" fill="#3fae6a"/>
+  <circle cx="95" cy="149" r="2.5" fill="#0b0b12"/>
+</svg>

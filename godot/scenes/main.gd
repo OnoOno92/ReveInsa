@@ -3,6 +3,7 @@ extends Node
 ## Debug/screenshot args (via tools/godot.sh shot ... -- --autostart=1 ...):
 ##   --autostart=1 --seed=N --night=1 --at=ruins|city|forbidden|wild --enemies=N
 ##   --give=moon_glow,liquor_worm --rank=2 --panel=aperture|bag|craft|shop|elder|map|help --tab=missions
+##   --ui_scale=1.35 (preview the phone UI scale)
 ##   --tide=1 (Day 5 night, beast tide running) --contrib=N --missions=1 (accept all offered)
 
 const WorldView := preload("res://world/world_view.gd")
@@ -14,6 +15,9 @@ var hud: CanvasLayer
 func _ready() -> void:
 	InputSetup.ensure()
 	var args: Dictionary = get_tree().root.get_meta("capture_args", {})
+	# Phones have dense screens: scale the whole UI up so text and buttons are thumb-sized.
+	var ui_scale := 1.35 if OS.has_feature("mobile") else 1.0
+	get_window().content_scale_factor = float(args.get("ui_scale", str(ui_scale)))
 	if args.has("autostart"):
 		Game.new_game("Shi Mo", int(args.get("seed", "12345")))
 		_apply_debug_before(args)

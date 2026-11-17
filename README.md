@@ -16,6 +16,18 @@ tools/godot.sh test                  # run GDScript tests
 tools/godot.sh shot res://scenes/main.tscn shot.png 30 1280x720 -- --autostart=1 --at=wild --enemies=4
 ```
 
+### Android (phone)
+
+```bash
+tools/setup_android.sh               # once: export templates + Android SDK (needs github.com and dl.google.com)
+tools/godot.sh apk                   # -> build/GuWilds.apk (debug-signed, arm64, Android 7.0+)
+```
+
+Install on a phone: copy the APK over (or download it), open it, and allow "install unknown apps" for that file manager or browser.
+From the Godot editor instead: Editor > Manage Export Templates > Download, set the Android SDK path in Editor Settings > Export > Android, then use the Android preset (Project > Export) or the one-click deploy button with the phone connected over USB.
+
+On phones the UI is scaled ×1.35, stays inside the notch safe area, the back button closes panels, and the game saves when you switch apps.
+
 ### Web prototype (reference only)
 
 ```bash

@@ -34,6 +34,13 @@ func _ready() -> void:
 	rng.randomize()
 
 
+## Save whenever the app is backgrounded or closed (phones kill apps without warning).
+func _notification(what: int) -> void:
+	if what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_WM_CLOSE_REQUEST]:
+		if world != null and not p.is_empty():
+			save_game()
+
+
 # ------------------------------------------------------------------ lifecycle
 func has_save() -> bool:
 	return FileAccess.file_exists(save_path)

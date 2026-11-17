@@ -76,7 +76,7 @@ explore → gather / hunt → feed Gu, eat → buy / refine Gu → rearrange ape
 - Immortal killer moves and dao marks.
 
 ### Platform
-- Godot 4.7 project in `godot/`. Next: Android and Web export presets (export templates via `tools/setup_godot.sh --templates`).
+- Godot 4.7 project in `godot/`. [x] Android APK export (`tools/setup_android.sh`, `tools/godot.sh apk`), mobile UI scale, safe area, back button, save-on-pause. [ ] Web export preset is present but untested. [ ] Release signing keystore for the Play Store. [ ] iOS needs a Mac with Xcode.
 - Art pass: replace the procedural tile atlas (`world/tileset_builder.gd`) and the `_draw()` placeholders with sprites.
 
 ## IP note

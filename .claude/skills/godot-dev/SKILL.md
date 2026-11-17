@@ -26,6 +26,12 @@ tools/setup_godot.sh --templates  # + export templates (~1 GB) only when you nee
    - Extra `--key=value` args reach the scene through `get_tree().root.get_meta("capture_args", {})`. Use them to set up a debug state (e.g. `--night=1`, `--spawn=wolf`) so the screenshot shows the thing you changed.
    - Rendering is software (llvmpipe), so it's slow: keep frames ≤ 60.
 
+## Android builds
+
+- `tools/setup_android.sh` installs the export templates plus the Android SDK into `~/android-sdk` and sets Godot's editor paths. It needs network access to `dl.google.com`.
+- `tools/godot.sh apk` writes `build/GuWilds.apk` (gitignored). Send it to the user as a file; don't commit it.
+- Preview the phone UI with a shot at `1200x540 ... -- --ui_scale=1.35` (phones use content scale 1.35).
+
 ## Writing Godot files by hand
 
 - **GDScript:** use static typing (`var hp: float`, `-> void`), `@export` for tunables, and signals for UI updates. Tabs for indentation.

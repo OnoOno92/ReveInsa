@@ -4,6 +4,7 @@
 #   tools/godot.sh test [filter]                 run GDScript tests in godot/tests (exit 1 on failure)
 #   tools/godot.sh shot <scene> <out.png> [frames=30] [WxH=1280x720] [-- extra args for the scene]
 #                                                render a scene under a virtual display and save a frame
+#   tools/godot.sh apk [release]                 export build/GuWilds.apk (debug-signed unless "release")
 #   tools/godot.sh run [godot args...]           anything else, headless
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -31,6 +32,11 @@ case "$cmd" in
     case "$out" in /*) ;; *) out="$PWD/$out";; esac
     xvfb-run -a -s "-screen 0 ${w}x${h}x24" "${G[@]}" --path "$PROJ" --rendering-driver opengl3 \
       --resolution "$size" -s res://tools/capture.gd -- --scene="$scene" --out="$out" --frames="$frames" "$@" 2>&1 | quiet ;;
+  apk)
+    mkdir -p "$ROOT/build"
+    mode="--export-debug"; [ "${1:-}" = "release" ] && mode="--export-release"
+    "${G[@]}" --headless --path "$PROJ" "$mode" "Android" "$ROOT/build/GuWilds.apk" 2>&1 | grep -E "ERROR|error|Signed|DONE" || true
+    ls -la "$ROOT/build/GuWilds.apk" ;;
   run) "${G[@]}" --headless --path "$PROJ" "$@" 2>&1 | quiet ;;
   *) sed -n '2,9p' "$0"; exit 1 ;;
 esac

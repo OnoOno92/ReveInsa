@@ -47,6 +47,8 @@ func _ready() -> void:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(root)
 	root.draw.connect(_draw_stick)
+	get_viewport().size_changed.connect(_apply_safe_area)
+	_apply_safe_area.call_deferred()
 
 	# --- top-left: identity + bars
 	var tl := VBoxContainer.new()
@@ -85,11 +87,12 @@ func _ready() -> void:
 	# --- top-right: minimap, stones, dock
 	var tr := VBoxContainer.new()
 	tr.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	tr.position = Vector2(-146, 10)
+	tr.position = Vector2(-134, 10)
+	tr.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	tr.add_theme_constant_override("separation", 6)
 	root.add_child(tr)
 	minimap = Widgets.MapView.new(70.0)
-	minimap.custom_minimum_size = Vector2(132, 132)
+	minimap.custom_minimum_size = Vector2(120, 120)
 	minimap.mouse_filter = Control.MOUSE_FILTER_STOP
 	minimap.gui_input.connect(func(e): if e is InputEventMouseButton and e.pressed: toggle_panel("map"))
 	tr.add_child(minimap)
@@ -99,12 +102,12 @@ func _ready() -> void:
 	stones_btn.tooltip_text = "Absorb a primeval stone to restore essence (Q)"
 	tr.add_child(stones_btn)
 	var dock := VBoxContainer.new()
-	dock.add_theme_constant_override("separation", 8)
+	dock.add_theme_constant_override("separation", 6)
 	dock.alignment = BoxContainer.ALIGNMENT_END
 	tr.add_child(dock)
 	for spec in [["Aperture", "aperture"], ["Bag", "bag"], ["Refine", "craft"], ["Guide", "help"]]:
-		var b := Widgets.button(spec[0], toggle_panel.bind(spec[1]), true, false, 12)
-		UITheme.round_button(b, 58)
+		var b := Widgets.button(spec[0], toggle_panel.bind(spec[1]), true, false, 11)
+		UITheme.round_button(b, 52)
 		b.size_flags_horizontal = Control.SIZE_SHRINK_END
 		dock.add_child(b)
 
@@ -243,6 +246,26 @@ func _draw_stick() -> void:
 	root.draw_arc(stick_origin, STICK_R, 0, TAU, 48, Color(1, 1, 1, 0.35), 2.0)
 	var off := (stick_pos - stick_origin).limit_length(STICK_R)
 	root.draw_circle(stick_origin + off, 26, Color(1, 1, 1, 0.55))
+
+
+## Keep the HUD clear of phone notches / rounded corners.
+func _apply_safe_area() -> void:
+	var win := Vector2(DisplayServer.window_get_size())
+	var safe := DisplayServer.get_display_safe_area()
+	if not OS.has_feature("mobile") or safe.size == Vector2i.ZERO or win.x <= 0.0:
+		return
+	var k := get_viewport().get_visible_rect().size / win
+	root.offset_left = safe.position.x * k.x
+	root.offset_top = safe.position.y * k.y
+	root.offset_right = -(win.x - safe.end.x) * k.x
+	root.offset_bottom = -(win.y - safe.end.y) * k.y
+
+
+## Android back button closes the open panel instead of quitting.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		if current_panel != "":
+			close_panel()
 
 
 # ------------------------------------------------------------------ input

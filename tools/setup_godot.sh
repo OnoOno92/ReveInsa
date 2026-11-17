@@ -24,9 +24,13 @@ if [ "${1:-}" = "--templates" ]; then
   TPL_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
   if [ ! -f "$TPL_DIR/version.txt" ]; then
     echo "Downloading export templates..."
-    curl -fsSL -o "$GODOT_HOME/tpl.tpz" "$BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+    # Large file: resume partial downloads and retry dropped connections.
+    for attempt in 1 2 3 4 5; do
+      curl -fsSL -C - --retry 3 -o "$GODOT_HOME/tpl.tpz" "$BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" && break
+      echo "download interrupted, resuming (attempt $attempt)..."; sleep 3
+    done
     mkdir -p "$TPL_DIR"
-    unzip -oq "$GODOT_HOME/tpl.tpz" -d "$GODOT_HOME/tpl" && mv "$GODOT_HOME"/tpl/templates/* "$TPL_DIR/"
+    unzip -oq "$GODOT_HOME/tpl.tpz" -d "$GODOT_HOME/tpl" && mv "$GODOT_HOME"/tpl/templates/* "$TPL_DIR/" || { echo "template install failed"; exit 1; }
     rm -rf "$GODOT_HOME/tpl" "$GODOT_HOME/tpl.tpz"
   fi
 fi
