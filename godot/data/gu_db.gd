@@ -167,6 +167,41 @@ const GU := {
 	},
 }
 
+## Trigger passives (idea from Martial Improved's gu_passives.js). Active while the Gu is placed and fed.
+## trigger: opener (first attack after 6s out of combat) | on_kill | on_hurt | low_hp (below 35% HP)
+## on_kill stacks: "stack": {stat: per_stack}, "max": n, fade 8s after the last kill.
+const PASSIVES := {
+	"moonlight": {"name": "Silent Crescent", "trigger": "opener", "desc": "After 6s out of combat, its first crescent deals double damage.", "opener_mult": 2.0},
+	"spark": {"name": "Kindling", "trigger": "opener", "desc": "The first spark of a fight burns three times as hot.", "opener_burn": 1.2},
+	"black_boar": {"name": "Bloodlust", "trigger": "on_kill", "desc": "+5% damage per kill (max 5), fading 8s after your last kill.", "stack": {"damage_buff": 0.05}, "max": 5},
+	"thunder_bead": {"name": "Static Charge", "trigger": "on_kill", "desc": "+4% move speed per kill (max 5), fading 8s after your last kill.", "stack": {"move_speed": 0.04}, "max": 5},
+	"vitality_leaf": {"name": "Rooted Life", "trigger": "on_kill", "desc": "Each kill heals you for 3 HP.", "heal": 3.0},
+	"essence_spring": {"name": "Wellspring", "trigger": "on_kill", "desc": "Each kill restores 2 primeval essence.", "essence": 2.0},
+	"stone_skin": {"name": "Stone Retort", "trigger": "on_hurt", "desc": "When hit, 25% chance to shove nearby enemies away.", "chance": 0.25, "shove": 220.0},
+	"water_shield": {"name": "Ebb and Flow", "trigger": "on_hurt", "desc": "When hit, 20% chance to restore 40% of your shield.", "chance": 0.2, "shield": 0.4},
+	"spider_silk": {"name": "Tangling Web", "trigger": "on_hurt", "desc": "When hit, slows enemies around you by 40% (every 4s at most).", "chance": 1.0, "slow": 0.4, "cooldown": 4.0},
+	"jade_skin": {"name": "Jade Resolve", "trigger": "low_hp", "desc": "Below 35% HP: +10 armor.", "stats": {"armor": 10.0}},
+	"bear_strength": {"name": "Cornered Bear", "trigger": "low_hp", "desc": "Below 35% HP: +30% damage.", "stats": {"damage_buff": 0.3}},
+	"jade_bone": {"name": "Light Bones", "trigger": "low_hp", "desc": "Below 35% HP: +20% move speed to escape.", "stats": {"move_speed": 0.2}},
+}
+
+## Named pairs: two specific Gu touching in the aperture. Smaller than killer moves.
+## "stats" apply globally; "attack": {gu id: mods} tweak that Gu's attack; "heal_cost" scales heal costs.
+const PAIRS := [
+	{"id": "moon_water", "name": "Moon over Water", "gu": ["moonlight", "water_arrow"], "desc": "Moonlight and Water Arrow reach 15% farther.",
+		"attack": {"moonlight": {"range_mult": 0.15}, "water_arrow": {"range_mult": 0.15}}},
+	{"id": "iron_hide", "name": "Iron Hide", "gu": ["stone_skin", "bronze_skin"], "desc": "+3 armor.", "stats": {"armor": 3.0}},
+	{"id": "spark_gale", "name": "Spark and Gale", "gu": ["spark", "wind_blade"], "desc": "Sparks ride the wind: they pierce one more foe.",
+		"attack": {"spark": {"pierce_add": 1}}},
+	{"id": "root_spring", "name": "Root and Spring", "gu": ["vitality_leaf", "essence_spring"], "desc": "Healing Gu cost half the essence.", "heal_cost": 0.5},
+	{"id": "wolf_boar", "name": "Wolf and Boar", "gu": ["wolf_slave", "black_boar"], "desc": "Bound beasts bite 30% harder.", "stats": {"summon_damage": 0.3}},
+	{"id": "silk_thunder", "name": "Silk and Thunder", "gu": ["spider_silk", "thunder_bead"], "desc": "Thunder Bead stuns 15% more often.",
+		"attack": {"thunder_bead": {"stun_add": 0.15}}},
+	{"id": "jade_body", "name": "Jade Body", "gu": ["jade_bone", "jade_skin"], "desc": "+10% move speed and +2 armor.", "stats": {"move_speed": 0.1, "armor": 2.0}},
+	{"id": "wine_moon", "name": "Drunken Moon", "gu": ["four_flavors", "moon_glow"], "desc": "Moon Glow fires 10% faster.",
+		"attack": {"moon_glow": {"cooldown_mult": -0.1}}},
+]
+
 ## Dao combos: when 2+ pairs of same-path Gu touch in the aperture, that path's effect turns on.
 ## "attack" keys apply to attacks of that path; "stats" keys apply globally.
 ## Attack effect keys: burn (fraction of hit dealt again over 3s), stun (chance, 0.6s),

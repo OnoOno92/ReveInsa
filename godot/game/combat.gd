@@ -12,6 +12,7 @@ var spawn_t := 0.0
 var ally_respawn := {} # summon key -> seconds until a fallen beast returns
 var _guards_posted := false
 var nemesis_actor: Node = null
+var _last_fire := {} # attack key -> Game.clock of its last shot (for opening-strike passives)
 
 
 func enemies() -> Array:
@@ -20,6 +21,22 @@ func enemies() -> Array:
 
 func _ready() -> void:
 	Game.nemesis_engage.connect(_on_nemesis_engage)
+	Game.passive_burst.connect(_on_passive_burst)
+
+
+## When-hit passives that reach out to nearby enemies.
+func _on_passive_burst(ps: Dictionary) -> void:
+	var at: Vector2 = Game.p["pos"]
+	for e in enemies():
+		if e.position.distance_to(at) > 110.0:
+			continue
+		if ps.has("shove"):
+			e.push((e.position - at).normalized() * ps["shove"] * 3.0)
+		if ps.has("slow"):
+			e.slow_t = 2.5
+			e.slow_amt = maxf(e.slow_amt, ps["slow"])
+	view.fx.add("ring", at, Color("#c9a36b") if ps.has("shove") else Color("#d16ba5"), 0.45, {"r": 110.0})
+	view.fx.text(at + Vector2(0, -44), ps["name"], Color("#ffe9a8"), 0.9)
 
 
 ## The nemesis steps out of the wilds with two followers.
@@ -282,6 +299,14 @@ func _update_attacks(delta: float) -> void:
 
 func _fire(a: Dictionary, target: Node) -> void:
 	var origin: Vector2 = Game.p["pos"]
+	# Opening strike: first shot of this Gu after 6s of calm
+	if a.has("opener") and Game.clock - _last_fire.get(a["key"], -99.0) > 6.0 and Game.clock - Game.last_hurt > 6.0:
+		a = a.duplicate()
+		a["damage"] = a["damage"] * a["opener"].get("opener_mult", 1.0)
+		if a["opener"].has("opener_burn"):
+			a["burn"] = a.get("burn", 0.0) + a["opener"]["opener_burn"]
+		view.fx.text(origin + Vector2(0, -52), a["opener"]["name"], Color("#ffe9a8"), 0.9)
+	_last_fire[a["key"]] = Game.clock
 	var ang: float = (target.position - origin).angle()
 	var col := Color.html(a["color"])
 	if a["is_killer"]:

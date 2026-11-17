@@ -60,7 +60,7 @@ explore → gather / hunt → feed Gu, eat → buy / refine Gu → rearrange ape
 - [x] Spirit field plots (buildable; two in Shi Lan Village): moon orchid, herb, berries, spirit rice; growth stages, night/water bonuses, tending for quality, rot, beast-tide trampling, growth during rest/travel. Harvest feeds Gu via the bag.
 - [x] Breakthrough tribulations: Peak Stage gates the next rank; Dao-themed arena storm (11 themes) with telegraphed strikes, spirits and a Calamity Avatar; flawless bonus; qi deviation on failure (no death penalty); Tribulation Ward Pill. Balanced with a headless autopilot sim (`--trib=1 --autopilot=1 --time_scale=4`).
 - [x] Nemesis: a named demonic Gu Master (generated per world, 8 Dao paths) who emerges on Day 2, grows daily (up to your rank +1), roams, holds a grudge (emerging / rival burns fields / threat hunts you), confronts you with followers, may flee with a Blood Escape Gu below 25% HP, drops his Gu and a Demon Core, and returns 25% stronger after 4 days. Map marker + rival card.
-- [ ] Trigger passives (on kill, on hurt, low HP) and named synergy pairs.
+- [x] Trigger passives on 12 Gu (opening strike, on kill stacks/heal/essence, when hit shove/slow/shield, below 35% HP) and 8 named pairs. v0.25 complete.
 
 ### v0.3 — Living world
 - Roaming NPC Gu Masters on one unified NPC schema (clan guards are NPCs too), with a world event log.

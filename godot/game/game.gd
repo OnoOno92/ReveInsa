@@ -13,6 +13,8 @@ signal sighting_resolved(sighting: Dictionary, caught: bool)
 signal plot_interact(plot: Dictionary)
 signal tribulation_started(theme: Dictionary, arena: Vector2)
 signal nemesis_engage(nemesis: Dictionary)
+## A when-hit passive fired that affects enemies around the player (shove / slow).
+signal passive_burst(passive: Dictionary)
 signal tribulation_ended(success: bool)
 
 var save_path := "user://save_v1.json"
@@ -28,6 +30,10 @@ var campfires: Array = [] # {pos: Vector2, until: float}
 ## Spirit field plots: {id, pos: Vector2, crop: String ("" = empty), growth: 0..1, ripe_age: days,
 ## quality: 0..3, tend_ready: time (days) when it can be tended again}
 var plots: Array = []
+## Trigger passives (see GuDB.PASSIVES): on-kill stacks {key: {n, until (clock)}}, when-hit cooldowns.
+var passive_stacks := {}
+var _passive_cd := {}
+var _low_hp := false
 ## The nemesis (see game/nemesis.gd); empty until he emerges.
 var nemesis: Dictionary = {}
 var nemesis_present := false # his actor is in the world right now
@@ -207,9 +213,54 @@ func delete_save() -> void:
 
 
 # ------------------------------------------------------------------ derived stats
-## Aperture stats plus active pill buffs.
+## Aperture stats plus active pill buffs and trigger passives.
 func stat(k: String) -> float:
-	return build["stats"].get(k, 0.0) + buff_stat(k)
+	return build["stats"].get(k, 0.0) + buff_stat(k) + passive_stat(k)
+
+## Low-HP passives (while below 35%) and on-kill stacks.
+func passive_stat(k: String) -> float:
+	var total := 0.0
+	for ps in build.get("passives", []):
+		match ps["trigger"]:
+			"low_hp":
+				if _low_hp:
+					total += float(ps["stats"].get(k, 0.0))
+			"on_kill":
+				if ps.has("stack") and passive_stacks.has(ps["key"]):
+					total += float(ps["stack"].get(k, 0.0)) * passive_stacks[ps["key"]]["n"]
+	return total
+
+func _passive_on_kill() -> void:
+	for ps in build.get("passives", []):
+		if ps["trigger"] != "on_kill":
+			continue
+		if ps.has("stack"):
+			var st: Dictionary = passive_stacks.get(ps["key"], {"n": 0, "until": 0.0})
+			st["n"] = mini(int(ps["max"]), st["n"] + 1)
+			st["until"] = clock + 8.0
+			passive_stacks[ps["key"]] = st
+		if ps.has("heal"):
+			p["hp"] = minf(max_hp(), p["hp"] + ps["heal"])
+		if ps.has("essence"):
+			p["essence"] = minf(max_essence(), p["essence"] + ps["essence"])
+
+func _passive_on_hurt() -> void:
+	for ps in build.get("passives", []):
+		if ps["trigger"] != "on_hurt":
+			continue
+		if clock < _passive_cd.get(ps["key"], 0.0) or rng.randf() >= ps.get("chance", 1.0):
+			continue
+		_passive_cd[ps["key"]] = clock + ps.get("cooldown", 1.0)
+		if ps.has("shield") and stat("shield") > 0.0:
+			shield = minf(stat("shield"), shield + stat("shield") * ps["shield"])
+		if ps.has("shove") or ps.has("slow"):
+			passive_burst.emit(ps)
+
+func _update_passives() -> void:
+	_low_hp = p["hp"] < max_hp() * 0.35
+	for k in passive_stacks.keys():
+		if passive_stacks[k]["until"] < clock:
+			passive_stacks.erase(k)
 
 ## Sum of a stat across active pill buffs. p.buffs: {pill id: until (days)}
 func buff_stat(k: String) -> float:
@@ -806,6 +857,7 @@ func _find_mission(list_name: String, id: int) -> Dictionary:
 	return {}
 
 func on_enemy_killed(enemy_id: String, was_raider: bool) -> void:
+	_passive_on_kill()
 	for q in p["quests"]["active"]:
 		if q["type"] == "hunt" and q["target"] == enemy_id and q["progress"] < q["count"]:
 			q["progress"] += 1
@@ -920,6 +972,7 @@ func tick(delta: float) -> void:
 	_expire_buffs()
 	_update_sightings(delta)
 	_update_nemesis(delta)
+	_update_passives()
 	if p["hp"] <= 0.0:
 		die("You starved.")
 
@@ -1236,6 +1289,7 @@ func hurt_player(dmg: float, source: String) -> void:
 		return
 	p["hp"] -= d
 	player_hurt.emit(d)
+	_passive_on_hurt()
 	var ch := channelling()
 	if not ch.is_empty():
 		ch["progress"] *= 0.6 # pain breaks your concentration

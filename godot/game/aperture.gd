@@ -152,7 +152,7 @@ static func path_pairs(size: int, active: Array, gu: Array) -> Dictionary:
 	return pairs
 
 
-## Returns {attacks, heals, summons, stats, synergies, killer_moves, combos, path_pairs, inactive}
+## Returns {attacks, heals, summons, stats, synergies, killer_moves, combos, path_pairs, inactive, pairs, passives}
 static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 	var size := size_for_rank(rank)
 	var stats := empty_stats()
@@ -184,6 +184,23 @@ static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 			combos.append(c)
 			_add_stats(stats, c.get("stats"))
 
+	# Named pairs: two specific Gu touching
+	var pairs_on: Array = []
+	for pr in GuDB.PAIRS:
+		if _pair_touching(pr["gu"][0], pr["gu"][1], active, gu, adj):
+			pairs_on.append(pr)
+			_add_stats(stats, pr.get("stats"))
+
+	# Trigger passives of every active Gu
+	var passives: Array = []
+	for p in active:
+		var pid: String = find_inst(gu, p["uid"])["def"]
+		if GuDB.PASSIVES.has(pid):
+			var ps: Dictionary = GuDB.PASSIVES[pid].duplicate(true)
+			ps["key"] = "p%d" % p["uid"]
+			ps["gu"] = pid
+			passives.append(ps)
+
 	var attacks: Array = []
 	var heals: Array = []
 	for p in active:
@@ -204,6 +221,9 @@ static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 		a["key"] = "a%d" % uid
 		a["name"] = d["name"]
 		a["path"] = d["path"]
+		a["def"] = inst["def"]
+		if GuDB.PASSIVES.has(inst["def"]) and GuDB.PASSIVES[inst["def"]]["trigger"] == "opener":
+			a["opener"] = GuDB.PASSIVES[inst["def"]]
 		a["is_killer"] = false
 		for c in combos:
 			if c["path"] == d["path"] and c.has("attack"):
@@ -235,6 +255,22 @@ static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 		a["cost"] = a["cost"] * maxf(0.2, cost_mult) * GuRoll.cost_mult(inst)
 		a["shiny"] = inst.get("shiny", false)
 		attacks.append(a)
+
+	# Pair bonuses on specific attacks / heals
+	for pr in pairs_on:
+		for gid in pr.get("attack", {}):
+			for a in attacks:
+				if a.get("def", "") != gid:
+					continue
+				var mods: Dictionary = pr["attack"][gid]
+				a["range"] = a["range"] * (1.0 + mods.get("range_mult", 0.0))
+				a["cooldown"] = a["cooldown"] * (1.0 + mods.get("cooldown_mult", 0.0))
+				a["pierce"] = a.get("pierce", 0) + mods.get("pierce_add", 0)
+				if mods.has("stun_add"):
+					a["stun"] = a.get("stun", 0.0) + mods["stun_add"]
+		if pr.has("heal_cost"):
+			for h in heals:
+				h["cost"] = h["cost"] * pr["heal_cost"]
 
 	# Killer moves: every required Gu present and connected through each other
 	var killer_moves: Array = []
@@ -293,7 +329,19 @@ static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 			s["hp"] = s["hp"] * spow
 			summons.append(s)
 	return {"attacks": attacks, "heals": heals, "summons": summons, "stats": stats, "synergies": synergies,
-		"killer_moves": killer_moves, "combos": combos, "path_pairs": pairs, "inactive": inactive}
+		"killer_moves": killer_moves, "combos": combos, "path_pairs": pairs, "inactive": inactive,
+		"pairs": pairs_on, "passives": passives}
+
+
+## True if any placed instance of gu id a touches any placed instance of gu id b.
+static func _pair_touching(a: String, b: String, active: Array, gu: Array, adj: Dictionary) -> bool:
+	for p in active:
+		if find_inst(gu, p["uid"])["def"] != a:
+			continue
+		for n in adj.get(p["uid"], {}):
+			if find_inst(gu, n)["def"] == b:
+				return true
+	return false
 
 
 static func _apply_attack_effects(a: Dictionary, fx: Dictionary) -> void:

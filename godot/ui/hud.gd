@@ -251,6 +251,11 @@ func _process(delta: float) -> void:
 		bl.append("[color=%s]%s %ds[/color]" % [ItemDB.ITEMS[id]["color"], ItemDB.ITEMS[id]["name"].trim_suffix(" Pill"), ceili(Game.buff_seconds(id))])
 	if p.get("breakthrough_aid", false):
 		bl.append("[color=#ffd76b]Breakthrough Aid ready[/color]")
+	for ps in Game.build.get("passives", []):
+		if Game.passive_stacks.has(ps["key"]):
+			bl.append("[color=#ffb347]%s x%d[/color]" % [ps["name"], Game.passive_stacks[ps["key"]]["n"]])
+		elif ps["trigger"] == "low_hp" and Game._low_hp:
+			bl.append("[color=#ff8080]%s[/color]" % ps["name"])
 	var bt := "  ".join(bl)
 	if buff_label.text != bt:
 		buff_label.text = bt

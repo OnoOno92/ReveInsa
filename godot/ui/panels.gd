@@ -20,6 +20,9 @@ func title(kind: String) -> String:
 	}.get(kind, kind)
 
 
+const TRIGGER_NAMES := {"opener": "opening strike", "on_kill": "on kill", "on_hurt": "when hit", "low_hp": "below 35% HP"}
+
+
 func on_close() -> void:
 	selected = -1
 	rot = 0
@@ -72,6 +75,9 @@ func _aperture(box: VBoxContainer) -> void:
 		side.add_child(Widgets.label(d["desc"], 12, UITheme.MUTED))
 		side.add_child(Widgets.rich("%s  -  Nature: %s  -  eats every %dd" % [_gu_title(sel), GuRoll.nature_label(sel), GuRoll.feed_every(sel)], 12))
 		side.add_child(Widgets.PotentialBars.new(sel))
+		if GuDB.PASSIVES.has(sel["def"]):
+			var ps: Dictionary = GuDB.PASSIVES[sel["def"]]
+			side.add_child(Widgets.rich("[color=#ffe9a8][b]%s[/b][/color] [color=#a69f8f](%s)[/color] - %s" % [ps["name"], TRIGGER_NAMES[ps["trigger"]], ps["desc"]], 12))
 		var btns: Array = [Widgets.button("Rotate (R)", rotate, true, false, 13)]
 		if Game.is_placed(selected):
 			btns.append(Widgets.button("Return to pouch", func(): Game.unplace_gu(selected); selected = -1, true, false, 13))
@@ -136,6 +142,23 @@ func _aperture(box: VBoxContainer) -> void:
 			box.add_child(Widgets.rich("[color=%s]%s %s[/color] [color=#a69f8f](%s, pairs %d/2)[/color] - %s" % [
 				"#ffe9a8" if on else Widgets.hex(GuDB.path_color(path)), "*" if on else "-", c["name"],
 				GuDB.PATH_NAMES[path], np, c["desc"]], 13))
+
+	# Trigger passives + named pairs
+	box.add_child(Widgets.header("Passives & Pairs"))
+	var active_ps: Array = b.get("passives", [])
+	if active_ps.is_empty():
+		box.add_child(Widgets.label("None of your placed Gu has a trigger passive.", 13, UITheme.MUTED))
+	for ps in active_ps:
+		box.add_child(Widgets.rich("[color=#ffe9a8]* %s[/color] [color=#a69f8f](%s, %s)[/color] - %s" % [ps["name"], GuDB.GU[ps["gu"]]["name"], TRIGGER_NAMES[ps["trigger"]], ps["desc"]], 13))
+	for pr in GuDB.PAIRS:
+		var on: bool = b.get("pairs", []).has(pr)
+		var own_any: bool = p["gu"].any(func(g): return g["def"] in pr["gu"])
+		if not on and not own_any:
+			continue # only show pairs you could work towards
+		var pair_parts: Array = pr["gu"].map(func(gid):
+			var own: bool = p["gu"].any(func(g): return g["def"] == gid)
+			return "[color=%s]%s[/color]" % ["#6fd3a8" if own else "#a69f8f", GuDB.GU[gid]["name"]])
+		box.add_child(Widgets.rich("%s[b]%s[/b] - %s touching - %s" % ["[color=#ffe9a8]* " if on else "[color=#c8c0b0]- ", pr["name"] + "[/color]", " + ".join(pair_parts), pr["desc"]], 13))
 
 	box.add_child(Widgets.header("Killer Move Codex"))
 	for km in GuDB.KILLER_MOVES:
@@ -504,6 +527,7 @@ func _help(box: VBoxContainer) -> void:
 		"[b]Move[/b] with WASD or by dragging on the left half of the screen. Your Gu attack [b]automatically[/b] when enemies are in range, consuming primeval essence.",
 		"[b]Aperture[/b]: a grid inside you. Place Gu in it to activate them. Higher ranks mean bigger grids.",
 		"[b]Synergy[/b]: support Gu (Liquor Worm, Spider Silk...) empower attack Gu they touch. Same-path Gu touching each other resonate for +15% damage.",
+		"[b]Passives & pairs[/b]: many Gu have a trigger passive (opening strike, on kill, when hit, below 35% HP), and certain two-Gu pairs give a bonus when they touch. Both are listed in the Aperture panel.",
 		"[b]Killer moves[/b]: certain Gu touching each other unlock powerful combined attacks. See the codex in the Aperture panel.",
 		"[b]Feeding[/b]: every Gu eats a specific food every few days at dawn. Hungry Gu stop working; 3 days later they die.",
 		"[b]Survival[/b]: watch Hunger. Night is dark and dangerous; build a campfire (Refine panel) and cook meat.",
