@@ -52,7 +52,19 @@ explore → gather / hunt → feed Gu, eat → buy / refine Gu → rearrange ape
 - [ ] Buildable shelters, storage chests, and Gu-food gardens (moon orchid beds, wine brewing).
 - [ ] Clan reputation and multiple clans.
 
+### v0.25 — Gu depth (ideas carried over from Martial Improved; see `docs/LEGACY_MARTIAL_IMPROVED.md`)
+- [ ] Status effects (burn, bleed, poison, stun) and one Dao combo effect per path, unlocked by 2+ same-path adjacent pairs.
+- [ ] Trigger passives (on kill, on hurt, low HP) and named synergy pairs.
+- [ ] Per-drop Gu rolls: potential (power/speed/efficiency/durability), nature, 1/512 shiny.
+- [ ] Wild Gu sightings: timed map markers matched to biome; stand in the zone to capture.
+- [ ] Alchemy furnace and pills; Gu-food garden plots with rot, tending and auto-feed.
+- [ ] Breakthrough tribulation as a Dao-themed arena boss; qi deviation on failure.
+- [ ] Nemesis: a named demonic rival who grows, roams, ambushes and returns stronger.
+
 ### v0.3 — Living world
+- Roaming NPC Gu Masters on one unified NPC schema (clan guards are NPCs too), with a world event log.
+- Seasons and calendar events (Spirit Spring, Ancient Grotto) with warnings.
+- Inheritance-ruin interiors (Formation Lock, Guardian Spirit, Poison Fog rooms; Remnant Will bosses).
 - More villages and clans with their own reputation and shops. Clan wars.
 - Demonic-path player route: attack caravans, rob Gu masters, lose righteous reputation.
 - Ruins and blessed lands as instanced dungeons with procedural layouts.
@@ -64,8 +76,8 @@ explore → gather / hunt → feed Gu, eat → buy / refine Gu → rearrange ape
 - Immortal killer moves and dao marks.
 
 ### Platform
-- The web build runs on mobile and desktop today. Next: PWA/offline support, then a Capacitor wrapper for Android/iOS.
-- Art pass: replace the placeholder canvas drawings with a sprite atlas (`src/game/game.ts` draw* functions are the only renderer hooks).
+- Godot 4.7 project in `godot/`. Next: Android and Web export presets (export templates via `tools/setup_godot.sh --templates`).
+- Art pass: replace the procedural tile atlas (`world/tileset_builder.gd`) and the `_draw()` placeholders with sprites.
 
 ## IP note
 This is a non-commercial fan project. Character names, clans and locations in the game are original (Shi Lan Village, the Nameless Inheritance, the Myriad Beast Mire). It uses the novel's world concepts and Gu names. If it ever goes commercial, the RI-specific names should be replaced or licensed.
