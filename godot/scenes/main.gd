@@ -3,7 +3,7 @@ extends Node
 ## Debug/screenshot args (via tools/godot.sh shot ... -- --autostart=1 ...):
 ##   --autostart=1 --seed=N --night=1 --at=ruins|city|forbidden|wild --enemies=N
 ##   --give=moon_glow,liquor_worm --rank=2 --panel=aperture|bag|craft|shop|elder|map|help --tab=missions
-##   --ui_scale=1.35 (preview the phone UI scale)
+##   --ui_scale=1.35 (preview the phone UI scale)  --shiny=1 (Gu from --give are shiny)
 ##   --tide=1 (Day 5 night, beast tide running) --contrib=N --missions=1 (accept all offered)
 
 const WorldView := preload("res://world/world_view.gd")
@@ -51,7 +51,7 @@ func _apply_debug_before(args: Dictionary) -> void:
 	if args.has("rank"):
 		Game.p["rank"] = int(args["rank"])
 	for g in str(args.get("give", "")).split(",", false):
-		Game.add_gu(g, true)
+		Game.add_gu(g, true, "wild", GuRoll.roll(Game.rng, "wild", args.has("shiny")))
 	if args.has("at"):
 		var at: String = args["at"]
 		var pos: Vector2 = WorldData.poi_center("village") + Vector2(0, -16 * WorldData.TILE) if at == "wild" else WorldData.poi_center(at) + Vector2(0, 3 * WorldData.TILE)

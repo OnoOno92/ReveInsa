@@ -20,6 +20,7 @@ func grid_size() -> int:
 
 
 func _process(_d: float) -> void:
+	queue_redraw() # shiny shimmer
 	var n := grid_size()
 	var want := Vector2(PAD * 2 + n * cell_px + (n - 1) * GAP, PAD * 2 + n * cell_px + (n - 1) * GAP)
 	if custom_minimum_size != want:
@@ -79,6 +80,9 @@ func _draw() -> void:
 			draw_rect(rr, col)
 			if uid == selected:
 				draw_rect(r.grow(-1), Color.WHITE, false, 2.0)
+			if inst.get("shiny", false):
+				var tw := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.004 + x + y)
+				draw_rect(r.grow(-2), Color(1.0, 0.85, 0.4, 0.4 + 0.5 * tw), false, 2.0)
 			if not labeled.has(uid):
 				labeled[uid] = true
 				var nm: String = GuDB.GU[inst["def"]]["name"]

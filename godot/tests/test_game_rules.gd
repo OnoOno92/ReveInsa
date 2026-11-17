@@ -28,8 +28,12 @@ func test_gu_eats_at_dawn_and_starves_without_food() -> void:
 func test_gu_fed_from_inventory() -> void:
 	var g = _game()
 	g.p["inventory"] = {"moon_orchid": 5, "herb": 5, "stone": 5}
-	g.advance_time(3.0)
-	assert_eq(g.count("moon_orchid"), 4, "moonlight ate one orchid on day 3")
+	var moon: Dictionary = g.p["gu"].filter(func(x): return x["def"] == "moonlight")[0]
+	var every := GuRoll.feed_every(moon) # depends on its durability roll and nature
+	g.advance_time(every - 1)
+	assert_eq(g.count("moon_orchid"), 5, "not hungry yet after %d days" % (every - 1))
+	g.advance_time(1.0)
+	assert_eq(g.count("moon_orchid"), 4, "ate one orchid on day %d" % every)
 	g.free()
 
 func test_cultivation_ranks_up_and_grows_aperture() -> void:

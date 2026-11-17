@@ -69,6 +69,8 @@ func _aperture(box: VBoxContainer) -> void:
 		side.add_child(Widgets.row([Widgets.GuIcon.new(sel["def"], rot), Widgets.label(d["name"], 15, UITheme.GOLD)]))
 		side.add_child(Widgets.rich("[color=%s]%s[/color]  -  Rank %d  -  %s" % [Widgets.hex(GuDB.color_of(sel["def"])), GuDB.PATH_NAMES[d["path"]], d["rank"], d["role"]], 12))
 		side.add_child(Widgets.label(d["desc"], 12, UITheme.MUTED))
+		side.add_child(Widgets.rich("%s  -  Nature: %s  -  eats every %dd" % [_gu_title(sel), GuRoll.nature_label(sel), GuRoll.feed_every(sel)], 12))
+		side.add_child(Widgets.PotentialBars.new(sel))
 		var btns: Array = [Widgets.button("Rotate (R)", rotate, true, false, 13)]
 		if Game.is_placed(selected):
 			btns.append(Widgets.button("Return to pouch", func(): Game.unplace_gu(selected); selected = -1, true, false, 13))
@@ -174,10 +176,14 @@ func _gu_card(inst: Dictionary, mode: String) -> Control:
 	pc.custom_minimum_size = Vector2(220, 0)
 	var v := VBoxContainer.new()
 	pc.add_child(v)
-	v.add_child(Widgets.row([Widgets.GuIcon.new(inst["def"]), Widgets.label(d["name"], 14)]))
-	var hunger := "[color=#ff6b6b]Starving![/color]" if Aperture.is_starving(inst) else ("[color=#ffb347]Hungry[/color]" if inst["unfed"] >= d["feed_every"] - 1 else "[color=#7cfc8a]Fed[/color]")
+	var title := Widgets.rich(_gu_title(inst), 14)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.add_child(Widgets.row([Widgets.GuIcon.new(inst["def"]), title]))
+	var every := GuRoll.feed_every(inst)
+	var hunger := "[color=#ff6b6b]Starving![/color]" if Aperture.is_starving(inst) else ("[color=#ffb347]Hungry[/color]" if inst["unfed"] >= every - 1 else "[color=#7cfc8a]Fed[/color]")
 	var lock := "  [color=#ff6b6b]Rank %d - too high[/color]" % d["rank"] if d["rank"] > Game.p["rank"] else ""
-	v.add_child(Widgets.rich("R%d - %s - %s\nEats %s every %dd - %s%s" % [d["rank"], GuDB.PATH_NAMES[d["path"]], d["role"], ItemDB.ITEMS[d["food"]]["name"], d["feed_every"], hunger, lock], 12))
+	v.add_child(Widgets.rich("R%d - %s - %s\nEats %s every %dd - %s%s" % [d["rank"], GuDB.PATH_NAMES[d["path"]], d["role"], ItemDB.ITEMS[d["food"]]["name"], every, hunger, lock], 12))
+	v.add_child(Widgets.PotentialBars.new(inst))
 	if mode == "select":
 		var uid: int = inst["uid"]
 		v.add_child(Widgets.button("Selected" if is_sel else "Place", func():
@@ -185,8 +191,15 @@ func _gu_card(inst: Dictionary, mode: String) -> Control:
 			rot = 0
 			hud._rebuild_panel(), true, is_sel, 13))
 	else:
-		v.add_child(Widgets.button("Sell for %d" % floori(d["price"] * 0.4), func(): Game.sell_gu(inst["uid"]), true, false, 13))
+		v.add_child(Widgets.button("Sell for %d" % GuRoll.sell_value(inst), func(): Game.sell_gu(inst["uid"]), true, false, 13))
 	return pc
+
+
+## "[Grade A] Moonlight Gu *" with grade colour and a shiny star.
+func _gu_title(inst: Dictionary) -> String:
+	var d: Dictionary = GuDB.GU[inst["def"]]
+	var shiny := " [color=#ffd76b]* SHINY[/color]" if inst.get("shiny", false) else ""
+	return "[color=%s][b]%s[/b][/color] %s%s" % [GuRoll.grade_color(inst), GuRoll.grade(inst), d["name"], shiny]
 
 
 # ------------------------------------------------------------------ bag

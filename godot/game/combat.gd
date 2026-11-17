@@ -341,8 +341,12 @@ func _kill(e: Node) -> void:
 	if d.has("gu_drop") and randf() < d["gu_drop"]["chance"]:
 		var pool: Array = d["gu_drop"]["pool"]
 		var g: String = pool[randi() % pool.size()]
-		Game.add_gu(g)
-		Game.toast.emit("You captured a wild %s!" % GuDB.GU[g]["name"], "gold")
+		var caught: Dictionary = Game.add_gu(g, false, "wild")
+		if caught["shiny"]:
+			Game.toast.emit("A SHINY %s! One in five hundred... (%s)" % [GuDB.GU[g]["name"], GuRoll.summary(caught)], "gold")
+			view.fx.add("ring", e.position, Color("#ffd76b"), 1.2, {"r": 90.0})
+		else:
+			Game.toast.emit("You captured a wild %s! (%s)" % [GuDB.GU[g]["name"], GuRoll.summary(caught)], "gold")
 	Game.p["kills"] += 1
 	Game.on_enemy_killed(e.id, e.raider)
 	view.fx.add("burst", e.position, Color.html(d["color"]), 0.5)

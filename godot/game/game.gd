@@ -63,8 +63,8 @@ func new_game(player_name: String, world_seed := -1) -> Dictionary:
 	flags = {}
 	campfires = []
 	shield = 0.0
-	add_gu("moonlight", true)
-	add_gu("stone_skin" if rng.randf() < 0.5 else "vitality_leaf", true)
+	add_gu("moonlight", true, "starter")
+	add_gu("stone_skin" if rng.randf() < 0.5 else "vitality_leaf", true, "starter")
 	refill_missions()
 	rebuild()
 	p["hp"] = max_hp()
@@ -112,6 +112,7 @@ func load_game() -> bool:
 		p[k] = int(p[k])
 	for g in p["gu"]:
 		g["uid"] = int(g["uid"]); g["unfed"] = int(g["unfed"])
+		GuRoll.ensure(g) # v0.25 saves had no potentials / nature / shiny
 	for pl in p["placed"]:
 		for k in ["uid", "x", "y", "rot"]:
 			pl[k] = int(pl[k])
@@ -216,8 +217,11 @@ func is_placed(uid: int) -> bool:
 			return true
 	return false
 
-func add_gu(def_id: String, auto_place := false) -> Dictionary:
+## source: starter | shop | wild | refine | clan | inherit (sets the roll range, see GuRoll).
+## rolls: pass GuRoll.inherit(...) to carry an old Gu's soul into a refined one.
+func add_gu(def_id: String, auto_place := false, source := "wild", rolls := {}) -> Dictionary:
 	var inst := {"uid": p["next_uid"], "def": def_id, "unfed": 0}
+	inst.merge(rolls if not rolls.is_empty() else GuRoll.roll(rng, source))
 	p["next_uid"] += 1
 	p["gu"].append(inst)
 	if auto_place and GuDB.GU[def_id]["rank"] <= p["rank"]:
@@ -322,6 +326,7 @@ func craft(id: String, facing: Vector2 = Vector2.RIGHT) -> void:
 	for k in r["needs"]:
 		add_item(k, -r["needs"][k])
 	p["stones"] -= r.get("stones", 0)
+	var inherited := {}
 	if r.has("gu_input"):
 		var cands: Array = p["gu"].filter(func(g): return g["def"] == r["gu_input"])
 		var pick: Dictionary = cands[0]
@@ -329,6 +334,7 @@ func craft(id: String, facing: Vector2 = Vector2.RIGHT) -> void:
 			if not is_placed(c["uid"]):
 				pick = c
 				break
+		inherited = GuRoll.inherit(pick)
 		remove_gu(pick["uid"])
 	var out: Dictionary = r["output"]
 	if out.has("item"):
@@ -337,8 +343,8 @@ func craft(id: String, facing: Vector2 = Vector2.RIGHT) -> void:
 	if out.has("gu"):
 		var success: float = 0.85 if r.has("gu_input") else 0.75 + p["aptitude"] * 0.2
 		if rng.randf() < success:
-			add_gu(out["gu"])
-			toast.emit("Refinement succeeded: %s!" % GuDB.GU[out["gu"]]["name"], "gold")
+			var made := add_gu(out["gu"], false, "refine", inherited)
+			toast.emit("Refinement succeeded: %s! (%s)" % [GuDB.GU[out["gu"]]["name"], GuRoll.summary(made)], "gold")
 		else:
 			toast.emit("Refinement failed... the materials dissipated.", "bad")
 	if out.get("place", "") == "campfire":
@@ -354,8 +360,8 @@ func buy_gu(def_id: String) -> void:
 		toast.emit("Not enough primeval stones.", "bad")
 		return
 	p["stones"] -= d["price"]
-	add_gu(def_id, true)
-	toast.emit("Bought %s." % d["name"], "good")
+	var made := add_gu(def_id, true, "shop")
+	toast.emit("Bought %s (%s)." % [d["name"], GuRoll.summary(made)], "good")
 	rebuild(); changed.emit(); save_game()
 
 func sell_gu(uid: int) -> void:
@@ -363,7 +369,7 @@ func sell_gu(uid: int) -> void:
 	if inst.is_empty():
 		return
 	var d: Dictionary = GuDB.GU[inst["def"]]
-	var v := floori(d["price"] * 0.4)
+	var v := GuRoll.sell_value(inst)
 	remove_gu(uid)
 	p["stones"] += v
 	toast.emit("Sold %s for %d stones." % [d["name"], v], "info")
@@ -449,14 +455,15 @@ func _on_new_day() -> void:
 	for inst in p["gu"].duplicate():
 		var d: Dictionary = GuDB.GU[inst["def"]]
 		inst["unfed"] += 1
-		if inst["unfed"] >= d["feed_every"]:
+		var every := GuRoll.feed_every(inst)
+		if inst["unfed"] >= every:
 			if count(d["food"]) > 0:
 				add_item(d["food"], -1)
 				inst["unfed"] = 0
-			elif inst["unfed"] >= d["feed_every"] + 3:
+			elif inst["unfed"] >= every + 3:
 				remove_gu(inst["uid"])
 				lines.append("%s starved to death!" % d["name"])
-			elif inst["unfed"] > d["feed_every"]:
+			elif inst["unfed"] > every:
 				lines.append("%s is starving (needs %s)." % [d["name"], ItemDB.ITEMS[d["food"]]["name"]])
 	_tide_reward()
 	refill_missions()
@@ -555,7 +562,7 @@ func buy_treasury(entry_id: String) -> void:
 		toast.emit("Your primeval sea widens: aptitude %d%% (Grade %s)." % [roundi(p["aptitude"] * 100), grade_of(p["aptitude"])], "gold")
 	else:
 		p["contrib"] -= e["cost"]
-		add_gu(e["id"], true)
+		add_gu(e["id"], true, "clan")
 		toast.emit("The clan grants you %s." % GuDB.GU[e["id"]]["name"], "gold")
 	rebuild(); changed.emit(); save_game()
 
@@ -673,8 +680,10 @@ func loot_inheritance() -> String:
 	p["stones"] += 150
 	var pool := ["moon_glow", "thunder_bead", "four_flavors", "fire_ember"]
 	var g: String = pool[rng.randi() % pool.size()]
-	add_gu(g)
+	var made := add_gu(g, false, "inherit")
 	add_item("jade_shard", 3)
+	if made["shiny"]:
+		toast.emit("The inherited Gu shimmers with a strange light... it is SHINY!", "gold")
 	toast.emit("You received the Nameless Inheritance: 150 primeval stones and %s!" % GuDB.GU[g]["name"], "gold")
 	changed.emit(); save_game()
 	return g

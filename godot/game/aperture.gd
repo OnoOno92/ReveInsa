@@ -54,7 +54,15 @@ static func def_of(gu: Array, uid: int) -> Dictionary:
 
 
 static func is_starving(inst: Dictionary) -> bool:
-	return inst["unfed"] > GuDB.GU[inst["def"]]["feed_every"]
+	return inst["unfed"] > GuRoll.feed_every(inst)
+
+
+## Scale positive stat values by a Gu's power roll.
+static func _scaled_stats(s: Dictionary, mult: float) -> Dictionary:
+	var out := {}
+	for k in s:
+		out[k] = s[k] * mult if s[k] > 0 else s[k]
+	return out
 
 
 ## Grid of uids (0 = empty), row-major.
@@ -162,7 +170,9 @@ static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 	var adj := adjacency(size, active, gu)
 
 	for p in active:
-		_add_stats(stats, def_of(gu, p["uid"]).get("stats"))
+		var st = def_of(gu, p["uid"]).get("stats")
+		if st != null:
+			_add_stats(stats, _scaled_stats(st, GuRoll.power_mult(find_inst(gu, p["uid"]))))
 
 	# Dao combos (2+ touching same-path pairs)
 	var pairs := path_pairs(size, active, gu)
@@ -179,10 +189,14 @@ static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 	for p in active:
 		var uid: int = p["uid"]
 		var d := def_of(gu, uid)
+		var inst := find_inst(gu, uid)
 		if d.has("heal"):
 			var h: Dictionary = d["heal"].duplicate()
 			h["key"] = "h%d" % uid
 			h["name"] = d["name"]
+			h["amount"] = h["amount"] * GuRoll.power_mult(inst)
+			h["cooldown"] = h["cooldown"] * GuRoll.cooldown_mult(inst)
+			h["cost"] = h["cost"] * GuRoll.cost_mult(inst)
 			heals.append(h)
 		if not d.has("attack"):
 			continue
@@ -202,7 +216,8 @@ static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 			var nd := def_of(gu, n)
 			if nd.has("aura"):
 				var au: Dictionary = nd["aura"]
-				dmg_mult += au.get("damage_mult", 0.0)
+				var apow := GuRoll.power_mult(find_inst(gu, n))
+				dmg_mult += au.get("damage_mult", 0.0) * apow
 				cd_mult += au.get("cooldown_mult", 0.0)
 				cost_mult += au.get("cost_mult", 0.0)
 				if au.has("slow"):
@@ -215,9 +230,10 @@ static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 		if resonance > 0:
 			dmg_mult += 0.15 * resonance
 			synergies.append("%s: %s resonance x%d (+%d%% dmg)" % [d["name"], GuDB.PATH_NAMES[d["path"]], resonance, 15 * resonance])
-		a["damage"] = a["damage"] * dmg_mult
-		a["cooldown"] = a["cooldown"] * maxf(0.3, cd_mult)
-		a["cost"] = a["cost"] * maxf(0.2, cost_mult)
+		a["damage"] = a["damage"] * dmg_mult * GuRoll.power_mult(inst)
+		a["cooldown"] = a["cooldown"] * maxf(0.3, cd_mult) * GuRoll.cooldown_mult(inst)
+		a["cost"] = a["cost"] * maxf(0.2, cost_mult) * GuRoll.cost_mult(inst)
+		a["shiny"] = inst.get("shiny", false)
 		attacks.append(a)
 
 	# Killer moves: every required Gu present and connected through each other
@@ -271,8 +287,10 @@ static func compute_build(rank: int, placed: Array, gu: Array) -> Dictionary:
 		if d.has("summon"):
 			var s: Dictionary = d["summon"].duplicate()
 			s["key"] = "s%d" % p["uid"]
+			var spow := GuRoll.power_mult(find_inst(gu, p["uid"]))
 			s["count"] = int(s["count"] + stats["summon_count"])
-			s["damage"] = s["damage"] * (1.0 + stats["summon_damage"] + stats["damage_mult"])
+			s["damage"] = s["damage"] * (1.0 + stats["summon_damage"] + stats["damage_mult"]) * spow
+			s["hp"] = s["hp"] * spow
 			summons.append(s)
 	return {"attacks": attacks, "heals": heals, "summons": summons, "stats": stats, "synergies": synergies,
 		"killer_moves": killer_moves, "combos": combos, "path_pairs": pairs, "inactive": inactive}

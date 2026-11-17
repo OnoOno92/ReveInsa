@@ -229,3 +229,31 @@ class SkillBar extends Control:
 				draw_rect(r.grow(-3), Color(0.9, 0.15, 0.15, 0.35))
 			var border := Color("#ffd76b") if killer else Color(1, 1, 1, 0.25)
 			draw_rect(r, border, false, 2.0 if killer else 1.0)
+
+
+
+## Four small bars for a Gu's potentials (0-31): Power, Speed, Efficiency, Durability.
+class PotentialBars extends Control:
+	var inst: Dictionary
+	const COLS := {"power": Color("#ff8a6b"), "speed": Color("#9ecbff"), "eff": Color("#7cfc8a"), "dur": Color("#e0c070")}
+	const LABELS := {"power": "PWR", "speed": "SPD", "eff": "EFF", "dur": "DUR"}
+
+	func _init(gu_inst: Dictionary) -> void:
+		inst = gu_inst
+		custom_minimum_size = Vector2(200, 4 * 13)
+		mouse_filter = MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var f := ThemeDB.fallback_font
+		var y := 0.0
+		var nat: Array = GuRoll.NATURES.get(inst.get("nature", "steady"), ["", ""])
+		for k in GuRoll.KEYS:
+			var v: int = inst.get("pot", {}).get(k, 0)
+			var tag := " +" if nat[0] == k else (" -" if nat[1] == k else "")
+			draw_string(f, Vector2(0, y + 10), LABELS[k] + tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.8, 0.78, 0.7))
+			var bx := 44.0
+			var bw := size.x - bx - 26.0
+			draw_rect(Rect2(bx, y + 3, bw, 7), Color(0, 0, 0, 0.45))
+			draw_rect(Rect2(bx, y + 3, bw * v / 31.0, 7), COLS[k])
+			draw_string(f, Vector2(size.x - 22, y + 10), str(v), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color.WHITE)
+			y += 13.0
