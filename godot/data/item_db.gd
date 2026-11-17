@@ -12,6 +12,7 @@ const ITEMS := {
 	"meat": {"name": "Raw Meat", "desc": "Edible raw, better cooked.", "color": "#c0392b", "price": 2, "food": 10.0, "heal": -3.0},
 	"cooked_meat": {"name": "Roast Meat", "desc": "Hearty and warm.", "color": "#a0522d", "price": 4, "food": 32.0, "heal": 6.0},
 	"rice_ball": {"name": "Rice Ball", "desc": "Village staple.", "color": "#f5f0e1", "price": 3, "food": 24.0},
+	"spirit_rice": {"name": "Spirit Rice", "desc": "Hardy grain. Plant it in a field, or cook two into a rice ball.", "color": "#efe3b0", "price": 1, "food": 5.0},
 	"wine": {"name": "Bamboo Wine", "desc": "Liquor Worms adore it.", "color": "#e0c070", "price": 4},
 	"pelt": {"name": "Beast Pelt", "desc": "Sells well to merchants.", "color": "#7f6a4f", "price": 4},
 	"bone": {"name": "Beast Bone", "desc": "Material for Gu refinement.", "color": "#e8e2d0", "price": 3},
@@ -44,6 +45,10 @@ const RECIPES := [
 		"desc": "Light in the dark. Needed for cooking."},
 	{"id": "furnace", "name": "Alchemy Furnace", "needs": {"stone": 10, "wood": 6, "bone": 2}, "output": {"place": "furnace"},
 		"desc": "A permanent stone furnace for brewing pills. Settlements already have one."},
+	{"id": "plot", "name": "Spirit Field Plot", "needs": {"wood": 4, "stone": 2, "herb": 1}, "output": {"place": "plot"},
+		"desc": "A tilled field. Plant moon orchids, herbs, berries or spirit rice and harvest Gu food."},
+	{"id": "cook_rice", "name": "Rice Ball", "needs": {"spirit_rice": 2}, "near_fire": true, "output": {"item": "rice_ball"},
+		"desc": "Steam two handfuls of spirit rice."},
 	{"id": "cook_meat", "name": "Roast Meat", "needs": {"meat": 1}, "near_fire": true, "output": {"item": "cooked_meat"},
 		"desc": "Cook raw meat over a fire."},
 	{"id": "brew_wine", "name": "Bamboo Wine", "needs": {"berries": 4, "herb": 1}, "near_fire": true, "output": {"item": "wine"},
@@ -89,7 +94,7 @@ const SHOPS := {
 	"village": {
 		"name": "Village Merchant",
 		"gu": ["moonlight", "spark", "water_arrow", "stone_skin", "vitality_leaf", "liquor_worm", "black_boar", "earth_ear"],
-		"items": ["rice_ball", "wine", "moon_orchid", "meat", "herb"],
+		"items": ["rice_ball", "spirit_rice", "wine", "moon_orchid", "meat", "herb"],
 	},
 	"city": {
 		"name": "Shang Clan Trading Hall",
@@ -117,3 +122,15 @@ static func category(r: Dictionary) -> String:
 	if r["output"].has("gu"):
 		return "refine"
 	return "craft"
+
+
+## Field crops: plant one of the item to sow it.
+## grow = days to ripen; yield = base harvest (+ quality from tending, max 3);
+## night = growth multiplier at night. Ripe crops rot after ROT_DAYS.
+const CROPS := {
+	"moon_orchid": {"grow": 1.0, "yield": 2, "night": 1.5},
+	"herb": {"grow": 0.6, "yield": 3, "night": 1.0},
+	"berries": {"grow": 0.5, "yield": 3, "night": 1.0},
+	"spirit_rice": {"grow": 0.8, "yield": 4, "night": 1.0},
+}
+const ROT_DAYS := 1.0

@@ -16,7 +16,7 @@ func _init(h: CanvasLayer) -> void:
 func title(kind: String) -> String:
 	return {
 		"aperture": "Aperture", "bag": "Bag", "craft": "Craft & Gu Refinement", "shop": "Trade",
-		"elder": "Clan Elder", "caravan": "Caravan", "map": "Southern Border", "help": "Gu Master Guide",
+		"elder": "Clan Elder", "plot": "Spirit Field", "caravan": "Caravan", "map": "Southern Border", "help": "Gu Master Guide",
 	}.get(kind, kind)
 
 
@@ -40,6 +40,7 @@ func build(kind: String, box: VBoxContainer, args: Dictionary) -> void:
 		"caravan": _caravan(box, args)
 		"map": _map(box)
 		"help": _help(box)
+		"plot": _plot(box, args)
 
 
 # ------------------------------------------------------------------ aperture
@@ -431,6 +432,33 @@ func _map(box: VBoxContainer) -> void:
 	box.add_child(Widgets.label("Unexplored land stays dark. Regional Walls (violet) seal the Southern Border from the other regions.", 13, UITheme.MUTED))
 
 
+func _plot(box: VBoxContainer, args: Dictionary) -> void:
+	var pl := Game.find_plot(args.get("plot", -1))
+	if pl.is_empty():
+		return
+	if pl["crop"] != "":
+		box.add_child(Widgets.label("%s - %s (%d%%), quality %d/3." % [ItemDB.ITEMS[pl["crop"]]["name"], Game.plot_stage(pl), roundi(pl["growth"] * 100), pl["quality"]], 14))
+		return
+	box.add_child(Widgets.label("Choose what to sow. Planting uses one of the crop. Tend the field while it grows for a bigger harvest. Ripe crops rot after a day, and beast tides can trample young fields.", 13, UITheme.MUTED))
+	if Game.plot_growth_mult(pl) > 1.0 and not Game.is_night():
+		box.add_child(Widgets.label("Water nearby: this field grows 25% faster.", 13, UITheme.JADE))
+	for crop in ItemDB.CROPS:
+		var c: Dictionary = ItemDB.CROPS[crop]
+		var d: Dictionary = ItemDB.ITEMS[crop]
+		var eaters: Array = []
+		for g in GuDB.GU.values():
+			if g["food"] == crop:
+				eaters.append(g["name"].trim_suffix(" Gu"))
+		var txt := Widgets.rich("[color=%s]o[/color] [b]%s[/b] (have %d)  -  ripe in %.1f days, harvest %d-%d%s\n[color=#a69f8f]%s[/color]" % [
+			d["color"], d["name"], Game.count(crop), c["grow"], c["yield"], c["yield"] + 3,
+			"  -  grows faster at night" if c["night"] > 1.0 else "",
+			("Feeds: " + ", ".join(eaters.slice(0, 4))) if eaters.size() else d["desc"]], 13)
+		txt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var pid: int = pl["id"]
+		box.add_child(Widgets.row([txt, Widgets.button("Plant", func(): Game.plant(pid, crop); hud.close_panel(), Game.count(crop) > 0, true, 13)]))
+		box.add_child(HSeparator.new())
+
+
 func _help(box: VBoxContainer) -> void:
 	var lines := [
 		"[b]Move[/b] with WASD or by dragging on the left half of the screen. Your Gu attack [b]automatically[/b] when enemies are in range, consuming primeval essence.",
@@ -443,6 +471,7 @@ func _help(box: VBoxContainer) -> void:
 		"[b]Cultivate[/b] with the Clan Elder to rank up. Use the caravan to reach Shang Clan City for rarer Gu.",
 		"[b]Clan missions[/b]: the village elder posts hunts, deliveries and scouting jobs. They pay stones and [b]clan contribution[/b], which buys rare Gu and pills in the Clan Treasury.",
 		"[b]Beast tides[/b]: every 5th night beasts storm Shi Lan Village. Clan guards hold the corners; every beast you slay earns stones and contribution at dawn.",
+		"[b]Spirit fields[/b]: build a Spirit Field Plot (Crafting tab) or use the two fields in Shi Lan Village. Plant moon orchids, herbs, berries or spirit rice, tend them for bigger harvests, and harvest before they rot. Your Gu eat from your bag automatically at dawn.",
 		"[b]Alchemy[/b]: build an Alchemy Furnace (or use the one in any settlement) and brew pills in the Refine panel: healing, essence, a pill that feeds every Gu, timed battle buffs, and a Breakthrough Aid for cultivation. Brewing raises your alchemy mastery.",
 		"[b]Wild Gu sightings[/b]: rumours point you to wild Gu (shown on the map). Stand in the glowing ring to bind it. Leaving the ring or taking hits sets you back, and the Gu may still break free.",
 		"[b]Unique Gu[/b]: every Gu has a grade (F-S), a nature and four potentials (power, speed, efficiency, durability). Wild Gu can be shiny (1 in 512).",

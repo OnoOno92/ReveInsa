@@ -190,6 +190,7 @@ func _ready() -> void:
 	Game.toast.connect(toast)
 	Game.changed.connect(_on_changed)
 	Game.npc_interact.connect(_on_npc)
+	Game.plot_interact.connect(func(pl): open_panel("plot", {"plot": pl["id"]}))
 	minimap.refresh()
 
 

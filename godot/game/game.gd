@@ -10,6 +10,7 @@ signal died
 signal player_hurt(amount: float)
 signal new_day(day: int)
 signal sighting_resolved(sighting: Dictionary, caught: bool)
+signal plot_interact(plot: Dictionary)
 
 var save_path := "user://save_v1.json"
 const DAY_SECONDS := 300.0 # real seconds per in-game day
@@ -21,6 +22,9 @@ var p := {}
 var time := 0.12 # days; fractional part = time of day
 var flags := {}
 var campfires: Array = [] # {pos: Vector2, until: float}
+## Spirit field plots: {id, pos: Vector2, crop: String ("" = empty), growth: 0..1, ripe_age: days,
+## quality: 0..3, tend_ready: time (days) when it can be tended again}
+var plots: Array = []
 ## Wild Gu sightings, see game/sightings.gd: {id, def, pos: Vector2, until, progress, need}
 var sightings: Array = []
 var _sight_t := 12.0 # first rumour comes early
@@ -69,6 +73,11 @@ func new_game(player_name: String, world_seed := -1) -> Dictionary:
 	campfires = []
 	sightings = []
 	_sight_t = 12.0
+	plots = []
+	# Shi Lan Village keeps two fields behind the elder's house for you
+	var vc := WorldData.poi_center("village")
+	add_plot(vc + Vector2(-4.5, 1.2) * WorldData.TILE)
+	add_plot(vc + Vector2(-3.0, 1.2) * WorldData.TILE)
 	shield = 0.0
 	add_gu("moonlight", true, "starter")
 	add_gu("stone_skin" if rng.randf() < 0.5 else "vitality_leaf", true, "starter")
@@ -96,6 +105,10 @@ func save_game() -> void:
 	var data := {
 		"v": 1, "seed": world.seed_value, "time": time, "player": pd, "flags": flags,
 		"depleted": depleted, "campfires": fires, "explored": Marshalls.raw_to_base64(world.explored),
+		"plots": plots.map(func(pl):
+			var c: Dictionary = pl.duplicate()
+			c["pos"] = [pl["pos"].x, pl["pos"].y]
+			return c),
 		"sightings": sightings.map(func(sg):
 			var c: Dictionary = sg.duplicate()
 			c["pos"] = [sg["pos"].x, sg["pos"].y]
@@ -149,6 +162,15 @@ func load_game() -> bool:
 		var n = by_id.get(int(d[0]))
 		if n:
 			n["regrow_day"] = float(d[1]); n["hp"] = int(d[2])
+	plots = []
+	if not data.has("plots"): # saves from before spirit fields: grant the village fields
+		var vc := WorldData.poi_center("village")
+		add_plot(vc + Vector2(-4.5, 1.2) * WorldData.TILE)
+		add_plot(vc + Vector2(-3.0, 1.2) * WorldData.TILE)
+	for pl in data.get("plots", []):
+		plots.append({"id": int(pl["id"]), "pos": Vector2(pl["pos"][0], pl["pos"][1]), "crop": str(pl["crop"]),
+			"growth": float(pl["growth"]), "ripe_age": float(pl["ripe_age"]), "quality": int(pl["quality"]),
+			"tend_ready": float(pl["tend_ready"])})
 	sightings = []
 	for sg in data.get("sightings", []):
 		sightings.append({"id": int(sg["id"]), "def": sg["def"], "pos": Vector2(sg["pos"][0], sg["pos"][1]),
@@ -448,6 +470,9 @@ func craft(id: String, facing: Vector2 = Vector2.RIGHT) -> void:
 	if out.get("place", "") == "campfire":
 		campfires.append({"pos": p["pos"] + facing * 30.0, "until": time + 1.0, "kind": "campfire"})
 		toast.emit("Campfire lit. It will burn for one day.", "good")
+	if out.get("place", "") == "plot":
+		add_plot(p["pos"] + facing * 40.0)
+		toast.emit("You till a spirit field. Plant something in it!", "good")
 	if out.get("place", "") == "furnace":
 		campfires.append({"pos": p["pos"] + facing * 34.0, "until": 1.0e9, "kind": "furnace"})
 		toast.emit("You build an Alchemy Furnace. Its fire never goes out.", "good")
@@ -542,6 +567,7 @@ func travel(dest: String) -> void:
 
 ## Skip time forward, processing every dawn crossed (Gu feeding etc).
 func advance_time(days: float) -> void:
+	grow_plots(days) # fields keep growing while you rest, travel or cultivate
 	var target := time + days
 	while floori(target) > day():
 		time = float(day() + 1)
@@ -696,6 +722,7 @@ func _tide_transitions(prev_tod: float) -> void:
 	if prev_tod < 0.68 and t >= 0.68:
 		flags["tide_kills"] = 0
 		flags["tide_on"] = true
+		_trample_fields()
 		toast.emit("BEAST TIDE! Defend Shi Lan Village until dawn!", "bad")
 
 func _tide_reward() -> void:
@@ -740,10 +767,116 @@ func tick(delta: float) -> void:
 	if clock - last_hurt > 3.0 and stat("shield") > 0.0:
 		shield = minf(stat("shield"), shield + stat("shield") * 0.15 * delta)
 	campfires = campfires.filter(func(c): return c["until"] > time)
+	grow_plots(delta / DAY_SECONDS)
 	_expire_buffs()
 	_update_sightings(delta)
 	if p["hp"] <= 0.0:
 		die("You starved.")
+
+
+# ------------------------------------------------------------------ spirit fields
+func add_plot(pos: Vector2) -> Dictionary:
+	flags["plot_id"] = int(flags.get("plot_id", 0)) + 1
+	var pl := {"id": flags["plot_id"], "pos": pos, "crop": "", "growth": 0.0, "ripe_age": 0.0, "quality": 0, "tend_ready": 0.0}
+	plots.append(pl)
+	changed.emit()
+	return pl
+
+func find_plot(id: int) -> Dictionary:
+	for pl in plots:
+		if pl["id"] == id:
+			return pl
+	return {}
+
+## Empty | Seeded | Sprouting | Growing | Ripe | Overripe
+static func plot_stage(pl: Dictionary) -> String:
+	if pl["crop"] == "":
+		return "Empty"
+	if pl["growth"] >= 1.0:
+		return "Overripe" if pl["ripe_age"] > ItemDB.ROT_DAYS * 0.6 else "Ripe"
+	if pl["growth"] < 0.25:
+		return "Seeded"
+	if pl["growth"] < 0.6:
+		return "Sprouting"
+	return "Growing"
+
+## Growth multiplier at a plot right now (water nearby, night for moon orchids).
+func plot_growth_mult(pl: Dictionary) -> float:
+	var m := 1.0
+	var t := WorldData.to_tile(pl["pos"])
+	for dy in range(-3, 4):
+		for dx in range(-3, 4):
+			if world.tile_at(t + Vector2i(dx, dy)) in [WorldData.T.WATER, WorldData.T.DEEP_WATER]:
+				m *= 1.25
+				return m * (ItemDB.CROPS[pl["crop"]]["night"] if is_night() and pl["crop"] != "" else 1.0)
+	if pl["crop"] != "" and is_night():
+		m *= ItemDB.CROPS[pl["crop"]]["night"]
+	return m
+
+func grow_plots(days: float) -> void:
+	for pl in plots:
+		if pl["crop"] == "":
+			continue
+		if pl["growth"] < 1.0:
+			pl["growth"] = minf(1.0, pl["growth"] + days / ItemDB.CROPS[pl["crop"]]["grow"] * plot_growth_mult(pl))
+			if pl["growth"] >= 1.0:
+				pl["ripe_age"] = 0.0
+		else:
+			pl["ripe_age"] += days
+			if pl["ripe_age"] > ItemDB.ROT_DAYS:
+				toast.emit("Your %s rotted in the field." % ItemDB.ITEMS[pl["crop"]]["name"], "bad")
+				_clear_plot(pl)
+				changed.emit()
+
+func _clear_plot(pl: Dictionary) -> void:
+	pl["crop"] = ""; pl["growth"] = 0.0; pl["ripe_age"] = 0.0; pl["quality"] = 0; pl["tend_ready"] = 0.0
+
+func plant(plot_id: int, crop: String) -> bool:
+	var pl := find_plot(plot_id)
+	if pl.is_empty() or pl["crop"] != "" or not ItemDB.CROPS.has(crop) or count(crop) <= 0:
+		return false
+	add_item(crop, -1)
+	pl["crop"] = crop
+	pl["growth"] = 0.0
+	toast.emit("Planted %s. Ripe in about %.1f days." % [ItemDB.ITEMS[crop]["name"], ItemDB.CROPS[crop]["grow"]], "good")
+	changed.emit()
+	return true
+
+func can_tend(pl: Dictionary) -> bool:
+	return pl["crop"] != "" and pl["growth"] < 1.0 and pl["tend_ready"] <= time
+
+## Tending: +15% growth, +1 quality (max 3). Once per 0.2 day per field.
+func tend(plot_id: int) -> bool:
+	var pl := find_plot(plot_id)
+	if pl.is_empty() or not can_tend(pl):
+		return false
+	pl["growth"] = minf(1.0, pl["growth"] + 0.15)
+	pl["quality"] = mini(3, pl["quality"] + 1)
+	pl["tend_ready"] = time + 0.2
+	if pl["growth"] >= 1.0:
+		pl["ripe_age"] = 0.0
+	toast.emit("You weed and water the %s (quality %d/3)." % [ItemDB.ITEMS[pl["crop"]]["name"], pl["quality"]], "good")
+	changed.emit()
+	return true
+
+func harvest(plot_id: int) -> int:
+	var pl := find_plot(plot_id)
+	if pl.is_empty() or pl["crop"] == "" or pl["growth"] < 1.0:
+		return 0
+	var n: int = ItemDB.CROPS[pl["crop"]]["yield"] + pl["quality"]
+	add_item(pl["crop"], n)
+	toast.emit("Harvested %d %s." % [n, ItemDB.ITEMS[pl["crop"]]["name"]], "gold")
+	_clear_plot(pl)
+	changed.emit()
+	save_game()
+	return n
+
+## Beast tide: each unripe crop has a 25% chance to be trampled.
+func _trample_fields() -> void:
+	for pl in plots:
+		if pl["crop"] != "" and pl["growth"] < 1.0 and rng.randf() < 0.25:
+			toast.emit("Raiders trampled your %s field!" % ItemDB.ITEMS[pl["crop"]]["name"], "bad")
+			_clear_plot(pl)
 
 
 # ------------------------------------------------------------------ wild Gu sightings

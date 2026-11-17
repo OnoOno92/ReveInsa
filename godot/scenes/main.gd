@@ -3,6 +3,7 @@ extends Node
 ## Debug/screenshot args (via tools/godot.sh shot ... -- --autostart=1 ...):
 ##   --autostart=1 --seed=N --night=1 --at=ruins|city|forbidden|wild --enemies=N
 ##   --give=moon_glow,liquor_worm --rank=2 --panel=aperture|bag|craft|shop|elder|map|help --tab=missions
+##   --garden=1 (spirit fields at different growth stages)
 ##   --alchemy=1 (furnace + ingredients + active pill buffs)
 ##   --sighting=<gu id> [--in=1] (wild Gu sighting next to / around the player)
 ##   --ui_scale=1.35 (preview the phone UI scale)  --shiny=1 (Gu from --give are shiny)
@@ -78,6 +79,16 @@ func _apply_debug_after(args: Dictionary) -> void:
 	for i in n:
 		var e: Node = world.combat.spawn("wolf", Game.p["pos"] + Vector2.from_angle(i * TAU / n) * 170.0)
 		e.aggro = true
+	if args.has("garden"):
+		# --garden=1: village fields planted at different stages, plus a ripe field by you
+		Game.add_item("moon_orchid", 2); Game.add_item("spirit_rice", 3); Game.add_item("berries", 2)
+		Game.plant(Game.plots[0]["id"], "moon_orchid")
+		Game.plots[0]["growth"] = 0.45
+		Game.plant(Game.plots[1]["id"], "spirit_rice")
+		Game.plots[1]["growth"] = 1.0
+		var extra := Game.add_plot(Game.p["pos"] + Vector2(70, 10))
+		Game.plant(extra["id"], "berries")
+		extra["growth"] = 0.1
 	if args.has("alchemy"):
 		# --alchemy=1: a furnace next to you, ingredients, and two active pill buffs
 		Game.campfires.append({"pos": Game.p["pos"] + Vector2(60, -10), "until": 1.0e9, "kind": "furnace"})
@@ -94,7 +105,8 @@ func _apply_debug_after(args: Dictionary) -> void:
 		Game.spawn_sighting(args["sighting"], Game.p["pos"] + off)
 		Game.spawn_sighting() # plus a random rumour elsewhere
 	if args.has("panel") and hud:
-		hud.open_panel(args["panel"], {"shop": args.get("shop", "village"), "tab": args.get("tab", "gu"), "dest": "city", "clan": true})
+		hud.open_panel(args["panel"], {"shop": args.get("shop", "village"), "tab": args.get("tab", "gu"), "dest": "city", "clan": true,
+			"plot": Game.add_plot(Game.p["pos"] + Vector2(-70, 10))["id"] if args["panel"] == "plot" else -1})
 	_report = args.has("report")
 	if _report:
 		get_tree().create_timer(float(args.get("report_at", "5"))).timeout.connect(func():

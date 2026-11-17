@@ -11,6 +11,7 @@ const CHUNK_TILES := 16
 
 var ground: TileMapLayer
 var entities: Node2D
+var ground_props: Node2D
 var player: CharacterBody2D
 var camera: Camera2D
 var combat: Node2D
@@ -42,6 +43,8 @@ func _ready() -> void:
 	pickups.view = self
 	add_child(pickups)
 
+	ground_props = Node2D.new() # flat things on the ground: spirit fields
+	add_child(ground_props)
 	add_child(SightingLayerScript.new())
 
 	entities = Node2D.new()
@@ -125,6 +128,7 @@ func _update_tint() -> void:
 
 
 func _sync_campfires() -> void:
+	_sync_plots()
 	if campfire_props.size() == Game.campfires.size():
 		return
 	for c in campfire_props:
@@ -135,6 +139,20 @@ func _sync_campfires() -> void:
 		prop.setup("campfire", c)
 		entities.add_child(prop)
 		campfire_props.append(prop)
+
+
+var plot_props: Array = []
+func _sync_plots() -> void:
+	if plot_props.size() == Game.plots.size():
+		return
+	for pp in plot_props:
+		pp.queue_free()
+	plot_props.clear()
+	for pl in Game.plots:
+		var prop := PropScript.new()
+		prop.setup("plot", pl)
+		ground_props.add_child(prop)
+		plot_props.append(prop)
 
 
 func _on_teleported(pos: Vector2) -> void:
@@ -204,6 +222,15 @@ func _find_interactable() -> void:
 				best_d = d
 				best = {"kind": "node", "prop": prop, "label": WorldData.NODE_INFO[prop.data["type"]]["verb"]}
 	if best.is_empty():
+		for prop in plot_props:
+			var d: float = prop.position.distance_squared_to(ppos)
+			if d < best_d:
+				best_d = d
+				var pl: Dictionary = prop.data
+				var stage := Game.plot_stage(pl)
+				var label := "Plant" if stage == "Empty" else ("Harvest" if stage in ["Ripe", "Overripe"] else ("Tend" if Game.can_tend(pl) else "Growing"))
+				best = {"kind": "plot", "prop": prop, "label": label}
+	if best.is_empty():
 		for prop in entities.get_children():
 			if prop.get("kind") == "sign" and prop.position.distance_squared_to(ppos) < best_d:
 				best = {"kind": "sign", "prop": prop, "label": "Read"}
@@ -240,6 +267,18 @@ func do_action() -> void:
 			Game.toast.emit(prop.data["text"], "info")
 		"node":
 			_gather(prop)
+		"plot":
+			var pl: Dictionary = prop.data
+			match interact["label"]:
+				"Plant": Game.plot_interact.emit(pl)
+				"Harvest":
+					var n := Game.harvest(pl["id"])
+					fx.text(pl["pos"] + Vector2(0, -20), "+%d" % n, Color("#ffe9a8"))
+				"Tend":
+					Game.tend(pl["id"])
+					fx.add("burst", pl["pos"], Color("#7fd0ff"), 0.4)
+				_:
+					Game.toast.emit("The %s is %s (%d%%). You can tend it again soon." % [ItemDB.ITEMS[pl["crop"]]["name"], Game.plot_stage(pl).to_lower(), roundi(pl["growth"] * 100)], "info")
 
 
 func _gather(prop: Node2D) -> void:

@@ -20,6 +20,8 @@ func setup(k: String, d: Dictionary) -> void:
 	if kind == "campfire":
 		add_child(Lights.make(230.0, Color(1.0, 0.7, 0.4), 1.1))
 		set_process(true)
+	elif kind == "plot":
+		set_process(true) # lives on the world's ground layer, under walkers
 	else:
 		set_process(false)
 	if kind == "node":
@@ -53,6 +55,7 @@ func _draw() -> void:
 		"sign":
 			draw_rect(Rect2(-2, -16, 4, 18), Color.html("#5a3b22"))
 			draw_rect(Rect2(-12, -22, 24, 10), Color.html("#a77b4f"))
+		"plot": _draw_plot()
 		"campfire" when data.get("kind", "campfire") == "furnace":
 			# stone alchemy furnace with a glowing mouth and a bronze cauldron lid
 			_shadow(16)
@@ -135,3 +138,40 @@ func _ellipse(c: Vector2, r: Vector2, col: Color) -> void:
 	draw_set_transform(c, 0, Vector2(1, r.y / r.x))
 	draw_circle(Vector2.ZERO, r.x, col)
 	draw_set_transform(Vector2.ZERO)
+
+
+func _draw_plot() -> void:
+	# tilled soil with furrows
+	var w := 40.0
+	var h := 28.0
+	draw_rect(Rect2(-w / 2 - 2, -h / 2 - 2, w + 4, h + 4), Color("#6b4a2b"))
+	draw_rect(Rect2(-w / 2, -h / 2, w, h), Color("#4a3220"))
+	for i in 4:
+		draw_line(Vector2(-w / 2 + 3, -h / 2 + 4 + i * 7), Vector2(w / 2 - 3, -h / 2 + 4 + i * 7), Color("#3a2618"), 2.0)
+	var crop: String = data["crop"]
+	if crop != "":
+		var g: float = data["growth"]
+		var col := ItemDB.color(crop)
+		var leaf := Color("#4f9a3c")
+		var rotten := false
+		if g >= 1.0 and data["ripe_age"] > ItemDB.ROT_DAYS * 0.6:
+			leaf = Color("#7a6a3a") # overripe: wilting
+			rotten = true
+		for i in 6:
+			var px := -w / 2 + 6 + (i % 3) * 14.0
+			var py := -h / 2 + 8 + (i / 3) * 13.0
+			if g < 0.25:
+				draw_circle(Vector2(px, py), 1.5, Color("#c8b48a")) # seeds
+				continue
+			var tall := 3.0 + 9.0 * minf(g, 1.0)
+			draw_line(Vector2(px, py + 2), Vector2(px, py + 2 - tall), leaf, 2.0)
+			draw_line(Vector2(px, py + 2 - tall * 0.5), Vector2(px + 3, py - tall * 0.6), leaf, 2.0)
+			if g >= 1.0:
+				var bob := sin(_t * 3.0 + i) * 0.8
+				draw_circle(Vector2(px, py + 1 - tall + bob), 3.2, col.darkened(0.3) if rotten else col)
+		# growth bar
+		if g < 1.0:
+			draw_rect(Rect2(-w / 2, h / 2 + 4, w, 3), Color(0, 0, 0, 0.5))
+			draw_rect(Rect2(-w / 2, h / 2 + 4, w * g, 3), Color("#7cfc8a"))
+	if highlighted:
+		draw_rect(Rect2(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8), Color(1, 0.94, 0.7, 0.9), false, 2.0)
