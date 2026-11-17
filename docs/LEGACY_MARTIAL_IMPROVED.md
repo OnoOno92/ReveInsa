@@ -48,3 +48,8 @@ These notes record what was worth carrying into Gu Wilds and what wasn't. File r
 - Multiplier sprawl across 12+ modules. Use one central modifier stack with caps.
 - Huge files (`sect.js` 474 KB) and 30+ status markdown files. Keep modules small; keep `docs/GDD.md` as the single roadmap.
 - Leftover generic-xianxia rank names. Use one rank vocabulary: RI ranks 1-9 with Initial/Middle/Upper/Peak.
+
+## Uploaded snapshots (checked)
+- `martial_improved.zip`: source identical to GitHub HEAD `8a83ad0`, plus the full 326-commit history and two UI reference screenshots.
+- `martial_improved_before_gui_changes.zip` (Apr 30) and `martial_improved_dualNPCs.zip` (May 4): earlier states of the same project. The only code missing from the final version is the removed equipment system (`equipFromBag`, `EQUIPMENT_SLOTS`, …), player notes and `establishFaction`. Nothing else was lost.
+- The UI reference is **Let's Go Legends** (portrait auto-battler: skill row with cooldown overlays, mana bar, bottom tab bar, minimap). Decision (Nov 2026): Gu Wilds **stays landscape**, but adopts the **skill bar with cooldown overlays**.

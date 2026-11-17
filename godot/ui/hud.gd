@@ -13,6 +13,7 @@ var hun_bar: Widgets.StatBar
 var clock_label: Label
 var mission_label: RichTextLabel
 var tide_label: Label
+var skill_bar: Control
 var zone_label: Label
 var minimap: Widgets.MapView
 var stones_btn: Button
@@ -132,6 +133,12 @@ func _ready() -> void:
 	br.position = Vector2(-200, -120)
 	br.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(br)
+
+	# --- skill bar (bottom centre): active Gu with cooldowns
+	skill_bar = Widgets.SkillBar.new()
+	skill_bar.combat = world.combat if world else null
+	skill_bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	root.add_child(skill_bar)
 
 	# --- toasts
 	toasts = VBoxContainer.new()

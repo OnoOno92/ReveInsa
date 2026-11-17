@@ -162,3 +162,70 @@ class MapView extends Control:
 			draw_string(f, Vector2(4, size.y / 2), "Western Desert", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, wc)
 			draw_string(f, Vector2(0, size.y / 2), "Eastern Sea", HORIZONTAL_ALIGNMENT_RIGHT, size.x - 4, 11, wc)
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.83, 0.66, 0.23, 0.5), false, 1.0)
+
+
+## Skill bar: one icon per active attack / heal, with a cooldown shade + countdown,
+## red when essence is short, gold frame for killer moves.
+class SkillBar extends Control:
+	const S := 44.0
+	const GAP := 6.0
+	var combat: Node # world combat node (owns cooldown timers)
+
+	func _init() -> void:
+		mouse_filter = MOUSE_FILTER_IGNORE
+
+	func _skills() -> Array:
+		var out: Array = []
+		if Game.build.is_empty():
+			return out
+		for a in Game.build["attacks"]:
+			out.append(a)
+		for h in Game.build["heals"]:
+			out.append(h)
+		return out
+
+	func _process(_d: float) -> void:
+		var n := _skills().size()
+		var w := maxf(0.0, n * S + (n - 1) * GAP)
+		if custom_minimum_size.x != w:
+			custom_minimum_size = Vector2(w, S)
+			# centred on the bottom-centre anchor, 18px above the bottom edge
+			offset_left = -w / 2.0
+			offset_right = w / 2.0
+			offset_top = -S - 18.0
+			offset_bottom = -18.0
+		queue_redraw()
+
+	func _draw() -> void:
+		var f := ThemeDB.fallback_font
+		var i := 0
+		for a in _skills():
+			var r := Rect2(i * (S + GAP), 0, S, S)
+			i += 1
+			var is_heal: bool = not a.has("kind")
+			var killer: bool = a.get("is_killer", false)
+			var col: Color = Color("#7cfc8a") if is_heal else (GuDB.path_color(a["path"]) if a.has("path") else Color("#ffd76b"))
+			draw_rect(r, Color(0.06, 0.05, 0.09, 0.85))
+			draw_rect(r.grow(-3), col.darkened(0.25))
+			# label: first letters of the name
+			var words: PackedStringArray = str(a["name"]).trim_suffix(" Gu").split(" ")
+			var abbr := ""
+			for wd in words:
+				abbr += wd.substr(0, 1)
+			draw_string_outline(f, r.position + Vector2(0, 17), abbr.substr(0, 3), HORIZONTAL_ALIGNMENT_CENTER, S, 13, 3, Color(0, 0, 0, 0.8))
+			draw_string(f, r.position + Vector2(0, 17), abbr.substr(0, 3), HORIZONTAL_ALIGNMENT_CENTER, S, 13, Color.WHITE)
+			# cooldown shade (drains from the top as it recharges)
+			var t: float = combat.timers.get(a["key"], 0.0) if combat else 0.0
+			var cd: float = maxf(0.01, a["cooldown"])
+			var k := clampf(t / cd, 0.0, 1.0)
+			if k > 0.02:
+				draw_rect(Rect2(r.position + Vector2(3, 3), Vector2(S - 6, (S - 6) * k)), Color(0, 0, 0, 0.6))
+				if t > 0.5:
+					var txt := "%.1f" % t
+					draw_string_outline(f, r.position + Vector2(0, S - 6), txt, HORIZONTAL_ALIGNMENT_CENTER, S, 12, 3, Color(0, 0, 0, 0.9))
+					draw_string(f, r.position + Vector2(0, S - 6), txt, HORIZONTAL_ALIGNMENT_CENTER, S, 12, Color.WHITE)
+			# not enough essence
+			if Game.p["essence"] < a["cost"]:
+				draw_rect(r.grow(-3), Color(0.9, 0.15, 0.15, 0.35))
+			var border := Color("#ffd76b") if killer else Color(1, 1, 1, 0.25)
+			draw_rect(r, border, false, 2.0 if killer else 1.0)
