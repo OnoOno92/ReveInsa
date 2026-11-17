@@ -11,6 +11,8 @@ signal player_hurt(amount: float)
 signal new_day(day: int)
 signal sighting_resolved(sighting: Dictionary, caught: bool)
 signal plot_interact(plot: Dictionary)
+signal tribulation_started(theme: Dictionary, arena: Vector2)
+signal tribulation_ended(success: bool)
 
 var save_path := "user://save_v1.json"
 const DAY_SECONDS := 300.0 # real seconds per in-game day
@@ -66,6 +68,7 @@ func new_game(player_name: String, world_seed := -1) -> Dictionary:
 		"inventory": {"meat": 2, "moon_orchid": 4, "herb": 4, "rice_ball": 2, "wood": 2},
 		"gu": [], "placed": [], "next_uid": 1, "kills": 0,
 		"buffs": {}, "alchemy_xp": 0, "breakthrough_aid": false,
+		"trib_ready": false, "deviation_until": 0.0, "tribulations": 0,
 		"contrib": 0, "quests": {"offered": [], "active": []}, "next_quest": 1,
 	}
 	time = 0.12
@@ -146,6 +149,9 @@ func load_game() -> bool:
 	p["contrib"] = int(p.get("contrib", 0))
 	p["alchemy_xp"] = int(p.get("alchemy_xp", 0))
 	p["breakthrough_aid"] = bool(p.get("breakthrough_aid", false))
+	p["trib_ready"] = bool(p.get("trib_ready", false))
+	p["deviation_until"] = float(p.get("deviation_until", 0.0))
+	p["tribulations"] = int(p.get("tribulations", 0))
 	if typeof(p.get("buffs")) != TYPE_DICTIONARY:
 		p["buffs"] = {}
 	p["next_quest"] = int(p.get("next_quest", 1))
@@ -219,7 +225,8 @@ func max_hp() -> float:
 
 func max_essence() -> float:
 	var base: float = 40.0 * pow(1.7, p["rank"] - 1) * (1.0 + p["stage"] * 0.2)
-	return base * (0.5 + p["aptitude"]) + stat("max_essence")
+	var dev := 0.8 if in_deviation() else 1.0 # qi deviation weakens the aperture
+	return (base * (0.5 + p["aptitude"]) + stat("max_essence")) * dev
 
 func essence_regen() -> float:
 	return max_essence() * 0.012 * (0.5 + p["aptitude"]) * (1.0 + stat("essence_regen"))
@@ -524,6 +531,9 @@ func cultivation_cost() -> int:
 	return 10 * p["rank"] * p["rank"]
 
 func cultivate() -> void:
+	if p.get("trib_ready", false): # checked before paying: no stones wasted
+		toast.emit("Your aperture is full to bursting. Face the tribulation to break through to Rank %d." % (p["rank"] + 1), "gold")
+		return
 	var cost := cultivation_cost()
 	if p["rank"] >= 5 and p["stage"] >= 3 and p["cultivation"] >= 100.0:
 		toast.emit("You stand at the peak of mortality. The path to Gu Immortal is not yet open.", "gold")
@@ -533,6 +543,8 @@ func cultivate() -> void:
 		return
 	p["stones"] -= cost
 	var gain: float = 20.0 + p["aptitude"] * 30.0
+	if in_deviation():
+		gain *= 0.5
 	if p.get("breakthrough_aid", false):
 		gain *= 1.5
 		p["breakthrough_aid"] = false
@@ -545,12 +557,137 @@ func cultivate() -> void:
 			p["stage"] += 1
 			toast.emit("Breakthrough! %s." % Aperture.STAGE_NAMES[p["stage"]], "gold")
 		elif p["rank"] < 5:
-			p["rank"] += 1
-			p["stage"] = 0
-			toast.emit("Your aperture expands - Rank %d! Your essence becomes %s." % [p["rank"], Aperture.ESSENCE_NAMES[p["rank"]]], "gold")
+			# Peak Stage is full: the next rank must be won in a tribulation.
+			p["cultivation"] = 100.0
+			p["trib_ready"] = true
+			toast.emit("Your aperture walls tremble... Heaven takes notice. Face the tribulation to reach Rank %d." % (p["rank"] + 1), "gold")
 	rebuild()
 	p["essence"] = max_essence()
 	changed.emit(); save_game()
+
+# ------------------------------------------------------------------ breakthrough tribulations
+const TRIB_THEMES := {
+	"lightning": {"name": "Heavenly Thunder Tribulation", "avatar": "Thunder Calamity Avatar", "color": "#d9c7ff"},
+	"moon": {"name": "Moonfall Tribulation", "avatar": "Moonfall Calamity Avatar", "color": "#bfe0ff"},
+	"fire": {"name": "Nine Flames Tribulation", "avatar": "Flame Calamity Avatar", "color": "#ff8a4c"},
+	"water": {"name": "Black Tide Tribulation", "avatar": "Tide Calamity Avatar", "color": "#5fb8ff"},
+	"earth": {"name": "Mountain-Crush Tribulation", "avatar": "Mountain Calamity Avatar", "color": "#c9a36b"},
+	"metal": {"name": "Ten Thousand Blades Tribulation", "avatar": "Blade Calamity Avatar", "color": "#dcdce8"},
+	"strength": {"name": "Mountain-Crush Tribulation", "avatar": "Titan Calamity Avatar", "color": "#c0743a"},
+	"wood": {"name": "Withering Vine Tribulation", "avatar": "Vine Calamity Avatar", "color": "#9be07a"},
+	"wind": {"name": "Heaven-Splitting Gale", "avatar": "Gale Calamity Avatar", "color": "#a8f5dc"},
+	"enslavement": {"name": "Heart-Demon Tribulation", "avatar": "Heart Demon", "color": "#d16ba5"},
+	"information": {"name": "Heart-Demon Tribulation", "avatar": "Heart Demon", "color": "#f2d36b"},
+}
+var in_tribulation := false
+var trib_status := "" # HUD banner text, set by the tribulation controller
+var _trib_hits := 0
+
+func in_deviation() -> bool:
+	return p.get("deviation_until", 0.0) > time
+
+## The tribulation takes the shape of your strongest Dao path (by aperture cells).
+func dominant_path() -> String:
+	var cells := {}
+	for pl in p["placed"]:
+		var inst := Aperture.find_inst(p["gu"], pl["uid"])
+		if inst.is_empty():
+			continue
+		var path: String = GuDB.GU[inst["def"]]["path"]
+		cells[path] = cells.get(path, 0) + GuDB.GU[inst["def"]]["shape"].size()
+	var best := "lightning"
+	var n := 0
+	for path in cells:
+		if cells[path] > n:
+			n = cells[path]
+			best = path
+	return best
+
+func tribulation_theme() -> Dictionary:
+	var t: Dictionary = TRIB_THEMES.get(dominant_path(), TRIB_THEMES["lightning"]).duplicate()
+	t["path"] = dominant_path()
+	t["rank"] = p["rank"] + 1
+	return t
+
+## "" when the tribulation can begin, otherwise the reason.
+func can_start_tribulation() -> String:
+	if not p.get("trib_ready", false):
+		return "Your aperture is not yet ready for a breakthrough."
+	if in_deviation():
+		return "Your qi is still deviating. Rest until it settles."
+	if p["hp"] < max_hp() * 0.5:
+		return "Heal to at least half HP first."
+	if build["attacks"].is_empty():
+		return "You have no attack Gu active - you would be defenceless."
+	return ""
+
+## An open clearing outside Shi Lan Village where Heaven can strike.
+func tribulation_arena() -> Vector2:
+	var vc := WorldData.poi_center("village")
+	for r in range(18, 60, 3):
+		for k in 12:
+			var c := vc + Vector2.from_angle(-PI / 2 + k * TAU / 12.0) * r * WorldData.TILE
+			if world.is_safe(c) or world.zone_at(c) == "wall":
+				continue
+			var clear := true
+			for a in 8:
+				for d in [0.0, 120.0, 240.0]:
+					if world.is_solid_pos(c + Vector2.from_angle(a * TAU / 8.0) * d):
+						clear = false
+			if clear:
+				return c
+	return vc + Vector2(0, -20) * WorldData.TILE
+
+func start_tribulation() -> bool:
+	var why := can_start_tribulation()
+	if why != "":
+		toast.emit(why, "bad")
+		return false
+	in_tribulation = true
+	_trib_hits = 0
+	var arena := tribulation_arena()
+	p["pos"] = arena
+	teleported.emit(arena)
+	var theme := tribulation_theme()
+	toast.emit("The sky darkens. The %s descends!" % theme["name"], "bad")
+	tribulation_started.emit(theme, arena)
+	return true
+
+## Called by the tribulation controller (and by die() while it runs).
+func end_tribulation(success: bool, reason := "") -> void:
+	if not in_tribulation:
+		return
+	in_tribulation = false
+	p["tribulations"] = int(p.get("tribulations", 0)) + 1
+	if success:
+		p["trib_ready"] = false
+		p["rank"] += 1
+		p["stage"] = 0
+		p["cultivation"] = 0.0
+		var reward: int = 40 * p["rank"]
+		var flawless := _trib_hits == 0
+		if flawless:
+			reward *= 2
+		p["stones"] += reward
+		rebuild()
+		p["hp"] = max_hp()
+		p["essence"] = max_essence()
+		toast.emit("You weathered the tribulation! Rank %d - your essence becomes %s. +%d stones%s" % [
+			p["rank"], Aperture.ESSENCE_NAMES[p["rank"]], reward, " (flawless!)" if flawless else "."], "gold")
+	else:
+		p["trib_ready"] = false
+		p["cultivation"] = 60.0 # lose 40% of the Peak Stage progress
+		p["deviation_until"] = time + 1.0
+		p["hp"] = maxf(p["hp"], max_hp() * 0.15)
+		rebuild()
+		toast.emit("%s Your qi deviates: cultivation slowed and essence weakened for a day." % reason, "bad")
+	tribulation_ended.emit(success)
+	changed.emit()
+	save_game()
+
+func note_tribulation_hit() -> void:
+	_trib_hits += 1
+
 
 func travel(dest: String) -> void:
 	var fee := 15
@@ -966,6 +1103,10 @@ func hurt_player(dmg: float, source: String) -> void:
 		die("You were slain by a %s." % source)
 
 func die(reason: String) -> void:
+	if in_tribulation:
+		p["hp"] = 1.0
+		end_tribulation(false, "You collapse under Heaven's wrath.")
+		return
 	var lost := floori(p["stones"] / 2.0)
 	p["stones"] -= lost
 	var keep := {}

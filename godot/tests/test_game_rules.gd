@@ -42,7 +42,11 @@ func test_cultivation_ranks_up_and_grows_aperture() -> void:
 	g.p["stones"] = 100000
 	for i in 40:
 		g.cultivate()
-	assert_true(g.p["rank"] >= 2, "rank should increase")
+	assert_eq(g.p["rank"], 1, "Peak Stage needs a tribulation, not more stones")
+	assert_true(g.p["trib_ready"])
+	assert_true(g.start_tribulation())
+	g.end_tribulation(true)
+	assert_eq(g.p["rank"], 2)
 	assert_eq(g.ap_size(), 3 + g.p["rank"])
 	g.free()
 

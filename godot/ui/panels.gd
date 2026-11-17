@@ -404,7 +404,24 @@ func _cultivate(box: VBoxContainer) -> void:
 	bar.custom_minimum_size = Vector2(300, 24)
 	bar.set_values(p["cultivation"], 100.0, "Cultivation %d%%" % floori(p["cultivation"]))
 	box.add_child(bar)
-	box.add_child(Widgets.label("Sit in seclusion and absorb primeval stones to nourish your aperture walls. Each session costs %d stones and some time. At Peak Stage, a breakthrough expands your aperture to the next rank: more grid space, stronger essence, and higher-rank Gu." % cost, 13, UITheme.MUTED))
+	box.add_child(Widgets.label("Sit in seclusion and absorb primeval stones to nourish your aperture walls. Each session costs %d stones and some time. When Peak Stage is full, Heaven tests you: survive a tribulation to break through to the next rank (more grid space, stronger essence, higher-rank Gu)." % cost, 13, UITheme.MUTED))
+	if Game.in_deviation():
+		box.add_child(Widgets.label("Qi deviation: cultivation is halved and your essence is weakened for %.1f more hours." % ((p["deviation_until"] - Game.time) * 24.0), 13, UITheme.BAD))
+	if p.get("trib_ready", false):
+		var th := Game.tribulation_theme()
+		var why := Game.can_start_tribulation()
+		var pc := PanelContainer.new()
+		pc.add_theme_stylebox_override("panel", UITheme.box(Color(0.5, 0.1, 0.1, 0.25), Color(th["color"]), 10, 2, 10))
+		var v := VBoxContainer.new()
+		pc.add_child(v)
+		v.add_child(Widgets.rich("[b][color=%s]%s[/color][/b]  -  breakthrough to Rank %d\nYour strongest Dao path shapes the storm. Dodge the red warning circles, survive the spirits, then destroy the [b]%s[/b] within 2 minutes. Leaving the ring counts as fleeing. Failure brings qi deviation, not death.%s" % [
+			th["color"], th["name"], th["rank"], th["avatar"],
+			"\n[color=#9ecbff]A Tribulation Ward Pill (Alchemy) softens Heaven's strikes.[/color]" if Game.count("pill_ward") == 0 else "\n[color=#7cfc8a]You carry %d Tribulation Ward Pill(s).[/color]" % Game.count("pill_ward")], 13))
+		var b := Widgets.button("Face the Tribulation", func(): hud.close_panel(); Game.start_tribulation(), why == "", true, 15)
+		v.add_child(b)
+		if why != "":
+			v.add_child(Widgets.label(why, 13, UITheme.BAD))
+		box.add_child(pc)
 	box.add_child(Widgets.row([
 		Widgets.button("Cultivate (%d stones)" % cost, func(): Game.cultivate(), p["stones"] >= cost, true, 14),
 		Widgets.button("Rest until dawn", func(): Game.rest_until_dawn(); hud.close_panel(), true, false, 14),
@@ -468,6 +485,7 @@ func _help(box: VBoxContainer) -> void:
 		"[b]Feeding[/b]: every Gu eats a specific food every few days at dawn. Hungry Gu stop working; 3 days later they die.",
 		"[b]Survival[/b]: watch Hunger. Night is dark and dangerous; build a campfire (Refine panel) and cook meat.",
 		"[b]Primeval stones[/b] are money and essence. Tap Absorb or press Q to restore essence mid-fight.",
+		"[b]Tribulations[/b]: when Peak Stage is full, face a tribulation from the Clan Elder. Dodge Heaven's strikes and destroy the Calamity Avatar to break through. Failing causes a day of qi deviation.",
 		"[b]Cultivate[/b] with the Clan Elder to rank up. Use the caravan to reach Shang Clan City for rarer Gu.",
 		"[b]Clan missions[/b]: the village elder posts hunts, deliveries and scouting jobs. They pay stones and [b]clan contribution[/b], which buys rare Gu and pills in the Clan Treasury.",
 		"[b]Beast tides[/b]: every 5th night beasts storm Shi Lan Village. Clan guards hold the corners; every beast you slay earns stones and contribution at dawn.",

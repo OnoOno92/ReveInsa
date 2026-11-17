@@ -3,6 +3,8 @@ extends Node
 ## Debug/screenshot args (via tools/godot.sh shot ... -- --autostart=1 ...):
 ##   --autostart=1 --seed=N --night=1 --at=ruins|city|forbidden|wild --enemies=N
 ##   --give=moon_glow,liquor_worm --rank=2 --panel=aperture|bag|craft|shop|elder|map|help --tab=missions
+##   --trib=1 [--trib_t=45] [--autopilot=1 --time_scale=4 --quit_after=40] (balance sims, run headless)
+##   --trib=1 [--trib_t=45] (start the breakthrough tribulation, optionally fast-forwarded)
 ##   --garden=1 (spirit fields at different growth stages)
 ##   --alchemy=1 (furnace + ingredients + active pill buffs)
 ##   --sighting=<gu id> [--in=1] (wild Gu sighting next to / around the player)
@@ -18,6 +20,11 @@ var hud: CanvasLayer
 func _ready() -> void:
 	InputSetup.ensure()
 	var args: Dictionary = get_tree().root.get_meta("capture_args", {})
+	if args.is_empty(): # also accept "-- --key=value" when run directly (headless balance sims)
+		for a in OS.get_cmdline_user_args():
+			if a.begins_with("--") and "=" in a:
+				var kv := a.substr(2).split("=", true, 1)
+				args[kv[0]] = kv[1]
 	# Phones have dense screens: scale the whole UI up so text and buttons are thumb-sized.
 	var ui_scale := 1.35 if OS.has_feature("mobile") else 1.0
 	get_window().content_scale_factor = float(args.get("ui_scale", str(ui_scale)))
@@ -104,6 +111,21 @@ func _apply_debug_after(args: Dictionary) -> void:
 		var off := Vector2(0, -30) if args.has("in") else Vector2(160, -60)
 		Game.spawn_sighting(args["sighting"], Game.p["pos"] + off)
 		Game.spawn_sighting() # plus a random rumour elsewhere
+	if args.has("trib"):
+		# --trib=1 [--trib_t=seconds]: Peak Stage, start the tribulation (optionally fast-forwarded)
+		Game.p["stage"] = 3
+		Game.p["cultivation"] = 100.0
+		Game.p["trib_ready"] = true
+		Game.p["hp"] = Game.max_hp()
+		Game.start_tribulation()
+		world.tribulation.t = float(args.get("trib_t", "0"))
+		world.tribulation.autopilot = args.has("autopilot")
+		Game.tribulation_ended.connect(func(ok): print("tribulation: %s after %.0fs, hits=%d, hp=%.0f" % ["SUCCESS" if ok else "FAILED", world.tribulation.t, Game._trib_hits, Game.p["hp"]]))
+	if args.has("time_scale"):
+		Engine.time_scale = float(args["time_scale"])
+		Engine.physics_ticks_per_second = int(60 * Engine.time_scale) # keep physics steps small
+	if args.has("quit_after"):
+		get_tree().create_timer(float(args["quit_after"]), true, false, true).timeout.connect(get_tree().quit)
 	if args.has("panel") and hud:
 		hud.open_panel(args["panel"], {"shop": args.get("shop", "village"), "tab": args.get("tab", "gu"), "dest": "city", "clan": true,
 			"plot": Game.add_plot(Game.p["pos"] + Vector2(-70, 10))["id"] if args["panel"] == "plot" else -1})

@@ -233,8 +233,11 @@ func _process(delta: float) -> void:
 	var ch := Game.channelling()
 	capture_label.text = "" if ch.is_empty() else "Binding %s... %d%%  (stay in the ring)" % [GuDB.GU[ch["def"]]["name"], roundi(100.0 * ch["progress"] / ch["need"])]
 	minimap.queue_redraw() # sighting markers pulse
-	# beast tide banner
-	if Game.tide_active():
+	# tribulation / beast tide banner
+	if Game.in_tribulation:
+		tide_label.text = Game.trib_status
+		tide_label.modulate.a = 0.75 + 0.25 * sin(Game.clock * 6.0)
+	elif Game.tide_active():
 		tide_label.text = "BEAST TIDE - %d slain" % int(Game.flags.get("tide_kills", 0))
 		tide_label.modulate.a = 0.65 + 0.35 * sin(Game.clock * 5.0)
 	elif Game.is_tide_day():

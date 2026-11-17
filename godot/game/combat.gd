@@ -73,7 +73,7 @@ func _update_spawns(delta: float) -> void:
 		if not e.is_boss() and e.position.distance_to(ppos) > 1500.0:
 			e.queue_free()
 	spawn_t -= delta
-	if spawn_t > 0.0:
+	if spawn_t > 0.0 or Game.in_tribulation:
 		return
 	spawn_t = 1.3
 	if Game.tide_active() and ppos.distance_to(WorldData.poi_center("village")) < 45.0 * WorldData.TILE:

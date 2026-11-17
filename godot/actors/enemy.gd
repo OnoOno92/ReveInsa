@@ -18,6 +18,9 @@ var aggro := false
 var home := Vector2.INF
 var radius := 12.0
 var knock := Vector2.ZERO
+var tint := Color(0, 0, 0, 0) # overrides the def colour when set (tribulation foes)
+var display_name := ""
+var dmg_scale := 1.0
 # status effects
 var burn_dps := 0.0
 var burn_t := 0.0
@@ -141,13 +144,17 @@ func _physics_process(delta: float) -> void:
 				move = dir
 			if d < rr and ranged_t <= 0.0:
 				ranged_t = def["ranged"]["cd"]
-				fired.emit(position, dir, def["ranged"])
+				var spec: Dictionary = def["ranged"].duplicate()
+				spec["damage"] = spec["damage"] * dmg_scale
+				if tint.a > 0.0:
+					spec["color"] = "#" + tint.lightened(0.3).to_html(false)
+				fired.emit(position, dir, spec)
 		else:
 			move = dir
 		var reach: float = radius + (target.radius if target else 0.0) + 14.0
 		if d < reach and atk_t <= 0.0:
 			atk_t = def["attack_cd"]
-			var dmg: float = def["damage"] * (1.0 if is_boss() else 1.0 + Game.day() * 0.03)
+			var dmg: float = def["damage"] * dmg_scale * (1.0 if is_boss() else 1.0 + Game.day() * 0.03)
 			if target:
 				target.take_damage(dmg)
 			else:
@@ -178,7 +185,7 @@ func _physics_process(delta: float) -> void:
 
 func _draw() -> void:
 	var r := radius
-	var col := Color.WHITE if flash > 0.0 else Color.html(def["color"])
+	var col := Color.WHITE if flash > 0.0 else (tint if tint.a > 0.0 else Color.html(def["color"]))
 	if flash <= 0.0 and burn_t > 0.0:
 		col = col.lerp(Color("#ff7a2a"), 0.45)
 	elif flash <= 0.0 and vuln_t > 0.0:
@@ -204,12 +211,13 @@ func _draw() -> void:
 			draw_rect(Rect2(r * 0.5, -r * 0.9, r * 0.6, 4), Color.html("#ffcc33"))
 	draw_set_transform(Vector2.ZERO)
 	_draw_status()
-	if hp < max_hp or is_boss():
-		var w := 70.0 if is_boss() else 28.0
+	var named: bool = is_boss() or def.get("elite", false)
+	if hp < max_hp or named:
+		var w := 70.0 if named else 28.0
 		draw_rect(Rect2(-w / 2, -r - 12, w, 4), Color(0, 0, 0, 0.6))
 		draw_rect(Rect2(-w / 2, -r - 12, w * maxf(0.0, hp / max_hp), 4), Color.html("#e74c3c"))
-		if is_boss():
-			draw_string(ThemeDB.fallback_font, Vector2(-w, -r - 16), def["name"], HORIZONTAL_ALIGNMENT_CENTER, w * 2, 12, Color.html("#ffcc33"))
+		if named:
+			draw_string(ThemeDB.fallback_font, Vector2(-w, -r - 16), display_name if display_name != "" else def["name"], HORIZONTAL_ALIGNMENT_CENTER, w * 2, 12, Color.html("#ffcc33"))
 
 
 func _draw_status() -> void:

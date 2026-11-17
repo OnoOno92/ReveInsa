@@ -37,6 +37,16 @@ const ENEMIES := {
 		"drops": [{"item": "herb", "chance": 0.8, "min": 1, "max": 3}, {"item": "bone", "chance": 0.5, "min": 1, "max": 2}],
 		"ranged": {"range": 180.0, "speed": 220.0, "damage": 12.0, "cd": 2.8, "color": "#9cff57"},
 	},
+	# Tribulation foes (stats are scaled by the tribulation controller; "elite" shows a named HP bar)
+	"trib_spirit": {
+		"name": "Tribulation Spirit", "faction": "beast", "hp": 40.0, "speed": 110.0, "damage": 8.0, "attack_cd": 1.0, "radius": 11.0,
+		"color": "#e8e0ff", "aggro": 900.0, "stones": [0, 0], "drops": [],
+	},
+	"trib_avatar": {
+		"name": "Calamity Avatar", "faction": "beast", "hp": 300.0, "speed": 70.0, "damage": 14.0, "attack_cd": 1.3, "radius": 26.0,
+		"color": "#f0e8ff", "aggro": 900.0, "stones": [0, 0], "drops": [], "elite": true,
+		"ranged": {"range": 280.0, "speed": 300.0, "damage": 10.0, "cd": 1.8, "color": "#ffffff"},
+	},
 	"bear_king": {
 		"name": "Mire Bear King", "faction": "beast", "hp": 900.0, "speed": 95.0, "damage": 28.0, "attack_cd": 1.4, "radius": 30.0,
 		"color": "#3b2516", "aggro": 380.0, "stones": [80, 140], "boss": true,

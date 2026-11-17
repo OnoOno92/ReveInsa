@@ -35,6 +35,8 @@ const ITEMS := {
 		"pill": {"buff": {"damage_buff": 0.25}, "seconds": 60.0}},
 	"pill_night": {"name": "Night Sight Pill", "desc": "Your eyes drink the moonlight: much wider vision for 150 seconds.", "color": "#bfe0ff", "price": 7,
 		"pill": {"buff": {"light_radius": 140.0, "reveal": 4.0}, "seconds": 150.0}},
+	"pill_ward": {"name": "Tribulation Ward Pill", "desc": "Heaven's strikes deal 30% less damage for 5 minutes.", "color": "#d9c7ff", "price": 25,
+		"pill": {"buff": {"trib_ward": 0.3}, "seconds": 300.0}},
 	"pill_breakthrough": {"name": "Breakthrough Aid Pill", "desc": "Your next cultivation session counts for 1.5x progress.", "color": "#ffd76b", "price": 30,
 		"pill": {"instant": {"breakthrough_aid": 1}}},
 }
@@ -68,6 +70,8 @@ const RECIPES := [
 		"desc": "+25% damage for 60s."},
 	{"id": "a_night", "name": "Night Sight Pill", "needs": {"moon_orchid": 2, "berries": 2}, "station": "furnace", "output": {"item": "pill_night"},
 		"desc": "Wide night vision for 150s."},
+	{"id": "a_ward", "name": "Tribulation Ward Pill", "needs": {"jade_shard": 1, "thunder_crystal": 1, "herb": 2}, "stones": 20, "station": "furnace", "output": {"item": "pill_ward"},
+		"desc": "-30% tribulation strike damage for 5 min."},
 	{"id": "a_breakthrough", "name": "Breakthrough Aid Pill", "needs": {"jade_shard": 2, "moon_orchid": 3}, "stones": 30, "station": "furnace", "output": {"item": "pill_breakthrough"},
 		"desc": "Next cultivation session x1.5."},
 	{"id": "r_vitality", "name": "Refine: Vitality Leaf Gu", "needs": {"herb": 6}, "stones": 12, "output": {"gu": "vitality_leaf"},

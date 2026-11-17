@@ -7,11 +7,13 @@ const CombatScript := preload("res://game/combat.gd")
 const FxScript := preload("res://game/fx.gd")
 const PickupsScript := preload("res://game/pickups.gd")
 const SightingLayerScript := preload("res://world/sighting_layer.gd")
+const TribulationScript := preload("res://game/tribulation.gd")
 const CHUNK_TILES := 16
 
 var ground: TileMapLayer
 var entities: Node2D
 var ground_props: Node2D
+var tribulation: Node2D
 var player: CharacterBody2D
 var camera: Camera2D
 var combat: Node2D
@@ -83,6 +85,9 @@ func _ready() -> void:
 	fx = FxScript.new()
 	fx.z_index = 10
 	add_child(fx)
+	tribulation = TribulationScript.new()
+	tribulation.view = self
+	add_child(tribulation)
 	night_tint = CanvasModulate.new()
 	add_child(night_tint)
 
@@ -121,6 +126,10 @@ func _update_chunks() -> void:
 func _update_tint() -> void:
 	var dark := Game.darkness()
 	night_tint.color = Color.WHITE.lerp(Color(0.12, 0.14, 0.32), dark)
+	if Game.in_tribulation:
+		# Heaven's storm: the sky darkens towards the tribulation's colour
+		var storm: Color = Color(tribulation.theme.get("color", "#d9c7ff")).darkened(0.55)
+		night_tint.color = night_tint.color.lerp(storm, 0.5)
 	var k := dark / 0.82
 	for l in get_tree().get_nodes_in_group("night_lights"):
 		l.energy = float(l.get_meta("base_energy", 1.0)) * k

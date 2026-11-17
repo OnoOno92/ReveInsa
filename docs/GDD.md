@@ -59,7 +59,7 @@ explore → gather / hunt → feed Gu, eat → buy / refine Gu → rearrange ape
 - [x] Wild Gu sightings: rumours matched to habitat (8 habitats, moon Gu at night), map markers, channel-to-capture with decay, damage interruption, escape roll.
 - [x] Alchemy furnace (buildable, permanent; settlements have one) and 8 pills: heal, essence, feed-all-Gu, armor/speed/damage/night-sight buffs, breakthrough aid. Alchemy mastery (success + double brew).
 - [x] Spirit field plots (buildable; two in Shi Lan Village): moon orchid, herb, berries, spirit rice; growth stages, night/water bonuses, tending for quality, rot, beast-tide trampling, growth during rest/travel. Harvest feeds Gu via the bag.
-- [ ] Breakthrough tribulation as a Dao-themed arena boss; qi deviation on failure.
+- [x] Breakthrough tribulations: Peak Stage gates the next rank; Dao-themed arena storm (11 themes) with telegraphed strikes, spirits and a Calamity Avatar; flawless bonus; qi deviation on failure (no death penalty); Tribulation Ward Pill. Balanced with a headless autopilot sim (`--trib=1 --autopilot=1 --time_scale=4`).
 - [ ] Nemesis: a named demonic rival who grows, roams, ambushes and returns stronger.
 
 ### v0.3 — Living world
