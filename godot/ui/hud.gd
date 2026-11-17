@@ -12,6 +12,7 @@ var ess_bar: Widgets.StatBar
 var hun_bar: Widgets.StatBar
 var clock_label: Label
 var mission_label: RichTextLabel
+var buff_label: RichTextLabel
 var tide_label: Label
 var skill_bar: Control
 var capture_label: Label
@@ -65,6 +66,10 @@ func _ready() -> void:
 	hun_bar = Widgets.StatBar.new(Color("#d08a2a"))
 	for b in [hp_bar, ess_bar, hun_bar]:
 		tl.add_child(b)
+	buff_label = Widgets.rich("", 12)
+	buff_label.custom_minimum_size = Vector2(260, 0)
+	buff_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tl.add_child(buff_label)
 	mission_label = Widgets.rich("", 12)
 	mission_label.custom_minimum_size = Vector2(260, 0)
 	mission_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -236,6 +241,15 @@ func _process(delta: float) -> void:
 		tide_label.modulate.a = 0.8
 	else:
 		tide_label.text = ""
+	# active pill buffs
+	var bl: Array[String] = []
+	for id in p["buffs"]:
+		bl.append("[color=%s]%s %ds[/color]" % [ItemDB.ITEMS[id]["color"], ItemDB.ITEMS[id]["name"].trim_suffix(" Pill"), ceili(Game.buff_seconds(id))])
+	if p.get("breakthrough_aid", false):
+		bl.append("[color=#ffd76b]Breakthrough Aid ready[/color]")
+	var bt := "  ".join(bl)
+	if buff_label.text != bt:
+		buff_label.text = bt
 	# mission tracker
 	var lines: Array[String] = []
 	for q in p["quests"]["active"]:

@@ -3,6 +3,7 @@ extends Node
 ## Debug/screenshot args (via tools/godot.sh shot ... -- --autostart=1 ...):
 ##   --autostart=1 --seed=N --night=1 --at=ruins|city|forbidden|wild --enemies=N
 ##   --give=moon_glow,liquor_worm --rank=2 --panel=aperture|bag|craft|shop|elder|map|help --tab=missions
+##   --alchemy=1 (furnace + ingredients + active pill buffs)
 ##   --sighting=<gu id> [--in=1] (wild Gu sighting next to / around the player)
 ##   --ui_scale=1.35 (preview the phone UI scale)  --shiny=1 (Gu from --give are shiny)
 ##   --tide=1 (Day 5 night, beast tide running) --contrib=N --missions=1 (accept all offered)
@@ -77,6 +78,16 @@ func _apply_debug_after(args: Dictionary) -> void:
 	for i in n:
 		var e: Node = world.combat.spawn("wolf", Game.p["pos"] + Vector2.from_angle(i * TAU / n) * 170.0)
 		e.aggro = true
+	if args.has("alchemy"):
+		# --alchemy=1: a furnace next to you, ingredients, and two active pill buffs
+		Game.campfires.append({"pos": Game.p["pos"] + Vector2(60, -10), "until": 1.0e9, "kind": "furnace"})
+		for it in ["herb", "berries", "moon_orchid", "meat", "stone", "bone", "thunder_crystal"]:
+			Game.add_item(it, 8)
+		for pill in ["pill_iron", "pill_fury", "pill_vitality"]:
+			Game.add_item(pill, 2)
+		Game.take_pill("pill_iron")
+		Game.take_pill("pill_fury")
+		Game.changed.emit()
 	if args.has("sighting"):
 		# --sighting=<gu id>: a sighting right next to the player (inside the ring if --in=1)
 		var off := Vector2(0, -30) if args.has("in") else Vector2(160, -60)

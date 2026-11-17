@@ -34,7 +34,7 @@ func build(kind: String, box: VBoxContainer, args: Dictionary) -> void:
 	match kind:
 		"aperture": _aperture(box)
 		"bag": _bag(box)
-		"craft": _craft(box)
+		"craft": _craft(box, args)
 		"shop": _shop(box, args)
 		"elder": _elder(box, args)
 		"caravan": _caravan(box, args)
@@ -221,16 +221,42 @@ func _bag(box: VBoxContainer) -> void:
 		var r := Widgets.rich(txt, 13)
 		r.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var items: Array = [r]
-		if d.has("food") or d.has("heal"):
+		if d.has("pill"):
+			items.append(Widgets.button("Take", func(): Game.take_pill(id), true, true, 13))
+		elif d.has("food") or d.has("heal"):
 			items.append(Widgets.button("Eat", func(): Game.eat(id), true, false, 13))
 		box.add_child(Widgets.row(items))
 		box.add_child(HSeparator.new())
 
 
 # ------------------------------------------------------------------ craft
-func _craft(box: VBoxContainer) -> void:
-	box.add_child(Widgets.label("Gu refinement may fail. Higher aptitude improves the odds.", 13, UITheme.MUTED))
+func _craft(box: VBoxContainer, args: Dictionary) -> void:
+	var tab: String = args.get("tab", "craft")
+	if not tab in ["craft", "refine", "alchemy"]:
+		tab = "craft"
+	var tabs: Array = []
+	for t in [["craft", "Crafting"], ["refine", "Gu Refinement"], ["alchemy", "Alchemy"]]:
+		var key: String = t[0]
+		tabs.append(Widgets.button(t[1], func(): args["tab"] = key; hud._rebuild_panel(), true, tab == key, 13))
+	box.add_child(Widgets.row(tabs))
+	match tab:
+		"refine":
+			box.add_child(Widgets.label("Gu refinement may fail. Higher aptitude improves the odds. A refined Gu keeps the nature, shiny and potentials of the Gu it came from.", 13, UITheme.MUTED))
+		"alchemy":
+			var at_furnace := Game.near_furnace(Game.p["pos"])
+			box.add_child(Widgets.rich("Alchemy mastery [b]%d[/b] (%d pills brewed)  -  success %d%%  -  perfect brew (2 pills) %d%%\n%s" % [
+				Game.alchemy_level(), Game.p.get("alchemy_xp", 0), roundi(Game.alchemy_success() * 100), roundi(Game.alchemy_double() * 100),
+				"[color=#7cfc8a]A furnace is at hand.[/color]" if at_furnace else "[color=#ff6b6b]You need an alchemy furnace: settlements have one, or build one in the Crafting tab.[/color]"], 13))
+			var active: Array[String] = []
+			for id in Game.p["buffs"]:
+				active.append("%s %ds" % [ItemDB.ITEMS[id]["name"], ceili(Game.buff_seconds(id))])
+			if Game.p.get("breakthrough_aid", false):
+				active.append("Breakthrough Aid (next cultivation)")
+			if active.size():
+				box.add_child(Widgets.label("Active: " + ", ".join(active), 13, UITheme.JADE))
 	for r in ItemDB.RECIPES:
+		if ItemDB.category(r) != tab:
+			continue
 		var why := Game.can_craft(r)
 		var needs: Array[String] = []
 		for k in r["needs"]:
@@ -241,12 +267,18 @@ func _craft(box: VBoxContainer) -> void:
 			needs.append("[color=%s]%s[/color]" % ["#7cfc8a" if Game.p["gu"].any(func(g): return g["def"] == r["gu_input"]) else "#ff6b6b", GuDB.GU[r["gu_input"]]["name"]])
 		if r.get("near_fire", false):
 			needs.append("[color=%s]near fire[/color]" % ("#7cfc8a" if Game.near_fire(Game.p["pos"]) else "#ff6b6b"))
+		if r.get("station", "") == "furnace":
+			needs.append("[color=%s]furnace[/color]" % ("#7cfc8a" if Game.near_furnace(Game.p["pos"]) else "#ff6b6b"))
+			var have := Game.count(r["output"]["item"])
+			if have > 0:
+				needs.append("[color=#a69f8f]have %d[/color]" % have)
 		if r.has("min_rank"):
 			needs.append("[color=%s]rank %d[/color]" % ["#7cfc8a" if Game.p["rank"] >= r["min_rank"] else "#ff6b6b", r["min_rank"]])
 		var txt := Widgets.rich("[b]%s[/b]  [color=#a69f8f]%s[/color]\n%s" % [r["name"], r["desc"], " - ".join(needs)], 13)
 		txt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var facing: Vector2 = hud.world.player.facing if hud.world else Vector2.RIGHT
-		var b := Widgets.button("Refine" if r["output"].has("gu") else "Make", func(): Game.craft(r["id"], facing), why == "", true, 13)
+		var verb := "Refine" if r["output"].has("gu") else ("Brew" if tab == "alchemy" else ("Build" if r["output"].has("place") else "Make"))
+		var b := Widgets.button(verb, func(): Game.craft(r["id"], facing), why == "", true, 13)
 		b.tooltip_text = why
 		box.add_child(Widgets.row([txt, b]))
 		box.add_child(HSeparator.new())
@@ -411,6 +443,7 @@ func _help(box: VBoxContainer) -> void:
 		"[b]Cultivate[/b] with the Clan Elder to rank up. Use the caravan to reach Shang Clan City for rarer Gu.",
 		"[b]Clan missions[/b]: the village elder posts hunts, deliveries and scouting jobs. They pay stones and [b]clan contribution[/b], which buys rare Gu and pills in the Clan Treasury.",
 		"[b]Beast tides[/b]: every 5th night beasts storm Shi Lan Village. Clan guards hold the corners; every beast you slay earns stones and contribution at dawn.",
+		"[b]Alchemy[/b]: build an Alchemy Furnace (or use the one in any settlement) and brew pills in the Refine panel: healing, essence, a pill that feeds every Gu, timed battle buffs, and a Breakthrough Aid for cultivation. Brewing raises your alchemy mastery.",
 		"[b]Wild Gu sightings[/b]: rumours point you to wild Gu (shown on the map). Stand in the glowing ring to bind it. Leaving the ring or taking hits sets you back, and the Gu may still break free.",
 		"[b]Unique Gu[/b]: every Gu has a grade (F-S), a nature and four potentials (power, speed, efficiency, durability). Wild Gu can be shiny (1 in 512).",
 		"[b]Enslavement path[/b]: the Wolf Enslavement Gu binds a wolf that fights beside you and returns after it falls.",

@@ -61,6 +61,7 @@ func new_game(player_name: String, world_seed := -1) -> Dictionary:
 		"rank": 1, "stage": 0, "cultivation": 0.0, "aptitude": aptitude, "stones": 30,
 		"inventory": {"meat": 2, "moon_orchid": 4, "herb": 4, "rice_ball": 2, "wood": 2},
 		"gu": [], "placed": [], "next_uid": 1, "kills": 0,
+		"buffs": {}, "alchemy_xp": 0, "breakthrough_aid": false,
 		"contrib": 0, "quests": {"offered": [], "active": []}, "next_quest": 1,
 	}
 	time = 0.12
@@ -91,7 +92,7 @@ func save_game() -> void:
 	pd["pos"] = [p["pos"].x, p["pos"].y]
 	var fires: Array = []
 	for c in campfires:
-		fires.append({"x": c["pos"].x, "y": c["pos"].y, "until": c["until"]})
+		fires.append({"x": c["pos"].x, "y": c["pos"].y, "until": c["until"], "kind": c.get("kind", "campfire")})
 	var data := {
 		"v": 1, "seed": world.seed_value, "time": time, "player": pd, "flags": flags,
 		"depleted": depleted, "campfires": fires, "explored": Marshalls.raw_to_base64(world.explored),
@@ -130,6 +131,10 @@ func load_game() -> bool:
 		p["inventory"][k] = int(p["inventory"][k])
 	# Fields added after v0.1 saves
 	p["contrib"] = int(p.get("contrib", 0))
+	p["alchemy_xp"] = int(p.get("alchemy_xp", 0))
+	p["breakthrough_aid"] = bool(p.get("breakthrough_aid", false))
+	if typeof(p.get("buffs")) != TYPE_DICTIONARY:
+		p["buffs"] = {}
 	p["next_quest"] = int(p.get("next_quest", 1))
 	if not p.has("quests"):
 		p["quests"] = {"offered": [], "active": []}
@@ -150,7 +155,7 @@ func load_game() -> bool:
 			"until": float(sg["until"]), "progress": float(sg["progress"]), "need": float(sg["need"])})
 	campfires = []
 	for c in data.get("campfires", []):
-		campfires.append({"pos": Vector2(c["x"], c["y"]), "until": float(c["until"])})
+		campfires.append({"pos": Vector2(c["x"], c["y"]), "until": float(c["until"]), "kind": c.get("kind", "campfire")})
 	var ex := Marshalls.base64_to_raw(data.get("explored", ""))
 	if ex.size() == world.explored.size():
 		world.explored = ex
@@ -165,8 +170,27 @@ func delete_save() -> void:
 
 
 # ------------------------------------------------------------------ derived stats
+## Aperture stats plus active pill buffs.
 func stat(k: String) -> float:
-	return build["stats"][k]
+	return build["stats"].get(k, 0.0) + buff_stat(k)
+
+## Sum of a stat across active pill buffs. p.buffs: {pill id: until (days)}
+func buff_stat(k: String) -> float:
+	var total := 0.0
+	for id in p.get("buffs", {}):
+		total += float(ItemDB.ITEMS[id]["pill"]["buff"].get(k, 0.0))
+	return total
+
+## Seconds left on a pill buff.
+func buff_seconds(id: String) -> float:
+	return maxf(0.0, (float(p["buffs"].get(id, 0.0)) - time) * DAY_SECONDS)
+
+func _expire_buffs() -> void:
+	for id in p["buffs"].keys():
+		if p["buffs"][id] <= time:
+			p["buffs"].erase(id)
+			toast.emit("The %s wears off." % ItemDB.ITEMS[id]["name"], "info")
+			changed.emit()
 
 func max_hp() -> float:
 	return 100.0 + (p["rank"] - 1) * 40.0 + p["stage"] * 8.0 + stat("max_hp")
@@ -285,12 +309,41 @@ func feed_gu(uid: int) -> bool:
 
 func eat(item: String) -> void:
 	var d: Dictionary = ItemDB.ITEMS.get(item, {})
+	if d.has("pill"):
+		take_pill(item)
+		return
 	if d.is_empty() or count(item) <= 0 or not (d.has("food") or d.has("heal")):
 		return
 	add_item(item, -1)
 	p["hunger"] = minf(100.0, p["hunger"] + d.get("food", 0.0))
 	p["hp"] = clampf(p["hp"] + d.get("heal", 0.0), 1.0, max_hp())
 	toast.emit("Ate %s." % d["name"], "info")
+	changed.emit()
+
+func take_pill(item: String) -> void:
+	var d: Dictionary = ItemDB.ITEMS.get(item, {})
+	if not d.has("pill") or count(item) <= 0:
+		return
+	var pill: Dictionary = d["pill"]
+	var inst: Dictionary = pill.get("instant", {})
+	if inst.has("breakthrough_aid") and p["breakthrough_aid"]:
+		toast.emit("A Breakthrough Aid Pill is already working in your aperture.", "info")
+		return
+	add_item(item, -1)
+	if inst.has("hp"):
+		p["hp"] = minf(max_hp(), p["hp"] + max_hp() * inst["hp"])
+	if inst.has("essence"):
+		p["essence"] = minf(max_essence(), p["essence"] + max_essence() * inst["essence"])
+	if inst.has("feed_all_gu"):
+		for g in p["gu"]:
+			g["unfed"] = 0
+		rebuild()
+	if inst.has("breakthrough_aid"):
+		p["breakthrough_aid"] = true
+	if pill.has("buff"):
+		p["buffs"][item] = time + pill["seconds"] / DAY_SECONDS # taking another refreshes the timer
+		rebuild()
+	toast.emit("You swallow a %s. %s" % [d["name"], d["desc"]], "good")
 	changed.emit()
 
 var _absorb_cd := 0.0
@@ -314,6 +367,26 @@ func near_fire(pos: Vector2) -> bool:
 			return true
 	return false
 
+## Settlements have furnaces; otherwise you need a placed Alchemy Furnace nearby.
+func near_furnace(pos: Vector2) -> bool:
+	if world.is_safe(pos):
+		return true
+	for c in campfires:
+		if c.get("kind", "campfire") == "furnace" and (c["pos"] as Vector2).distance_to(pos) < 110.0:
+			return true
+	return false
+
+func alchemy_level() -> int:
+	return floori(sqrt(p.get("alchemy_xp", 0) / 3.0))
+
+## Chance a brew succeeds (Gu refinement has its own rule).
+func alchemy_success() -> float:
+	return minf(0.97, 0.7 + 0.05 * alchemy_level() + (p["aptitude"] - 0.5) * 0.2)
+
+## Chance a successful brew yields two pills.
+func alchemy_double() -> float:
+	return minf(0.5, 0.06 * alchemy_level())
+
 ## Returns "" when craftable, otherwise the reason.
 func can_craft(r: Dictionary) -> String:
 	for k in r["needs"]:
@@ -325,6 +398,8 @@ func can_craft(r: Dictionary) -> String:
 		return "Need a %s" % GuDB.GU[r["gu_input"]]["name"]
 	if r.get("near_fire", false) and not near_fire(p["pos"]):
 		return "Must be near a fire"
+	if r.get("station", "") == "furnace" and not near_furnace(p["pos"]):
+		return "Needs an alchemy furnace"
 	if p["rank"] < r.get("min_rank", 0):
 		return "Requires rank %d" % r["min_rank"]
 	return ""
@@ -351,7 +426,16 @@ func craft(id: String, facing: Vector2 = Vector2.RIGHT) -> void:
 		inherited = GuRoll.inherit(pick)
 		remove_gu(pick["uid"])
 	var out: Dictionary = r["output"]
-	if out.has("item"):
+	if out.has("item") and r.get("station", "") == "furnace":
+		p["alchemy_xp"] = int(p.get("alchemy_xp", 0)) + 1
+		var nm: String = ItemDB.ITEMS[out["item"]]["name"]
+		if rng.randf() < alchemy_success():
+			var n := 2 if rng.randf() < alchemy_double() else 1
+			add_item(out["item"], n)
+			toast.emit(("A perfect brew: 2 %s!" % nm) if n == 2 else ("Brewed a %s." % nm), "gold" if n == 2 else "good")
+		else:
+			toast.emit("The pill cracked in the furnace... the medicine is wasted.", "bad")
+	elif out.has("item"):
 		add_item(out["item"], out.get("count", 1))
 		toast.emit("Made %s." % ItemDB.ITEMS[out["item"]]["name"], "good")
 	if out.has("gu"):
@@ -362,8 +446,11 @@ func craft(id: String, facing: Vector2 = Vector2.RIGHT) -> void:
 		else:
 			toast.emit("Refinement failed... the materials dissipated.", "bad")
 	if out.get("place", "") == "campfire":
-		campfires.append({"pos": p["pos"] + facing * 30.0, "until": time + 1.0})
+		campfires.append({"pos": p["pos"] + facing * 30.0, "until": time + 1.0, "kind": "campfire"})
 		toast.emit("Campfire lit. It will burn for one day.", "good")
+	if out.get("place", "") == "furnace":
+		campfires.append({"pos": p["pos"] + facing * 34.0, "until": 1.0e9, "kind": "furnace"})
+		toast.emit("You build an Alchemy Furnace. Its fire never goes out.", "good")
 	rebuild()
 	changed.emit()
 	save_game()
@@ -420,7 +507,12 @@ func cultivate() -> void:
 		toast.emit("Cultivation needs %d primeval stones." % cost, "bad")
 		return
 	p["stones"] -= cost
-	p["cultivation"] += 20.0 + p["aptitude"] * 30.0
+	var gain: float = 20.0 + p["aptitude"] * 30.0
+	if p.get("breakthrough_aid", false):
+		gain *= 1.5
+		p["breakthrough_aid"] = false
+		toast.emit("The Breakthrough Aid Pill surges through your aperture walls!", "gold")
+	p["cultivation"] += gain
 	advance_time(0.05)
 	if p["cultivation"] >= 100.0:
 		p["cultivation"] = 0.0
@@ -648,6 +740,7 @@ func tick(delta: float) -> void:
 	if clock - last_hurt > 3.0 and stat("shield") > 0.0:
 		shield = minf(stat("shield"), shield + stat("shield") * 0.15 * delta)
 	campfires = campfires.filter(func(c): return c["until"] > time)
+	_expire_buffs()
 	_update_sightings(delta)
 	if p["hp"] <= 0.0:
 		die("You starved.")

@@ -53,6 +53,17 @@ func _draw() -> void:
 		"sign":
 			draw_rect(Rect2(-2, -16, 4, 18), Color.html("#5a3b22"))
 			draw_rect(Rect2(-12, -22, 24, 10), Color.html("#a77b4f"))
+		"campfire" when data.get("kind", "campfire") == "furnace":
+			# stone alchemy furnace with a glowing mouth and a bronze cauldron lid
+			_shadow(16)
+			draw_rect(Rect2(-14, -22, 28, 26), Color("#5f5a55"))
+			draw_rect(Rect2(-14, -22, 28, 4), Color("#77716a"))
+			var glow := 0.6 + 0.4 * sin(_t * 5.0)
+			draw_rect(Rect2(-7, -10, 14, 10), Color(1.0, 0.55 + 0.2 * glow, 0.2))
+			draw_colored_polygon(PackedVector2Array([Vector2(-12, -22), Vector2(12, -22), Vector2(8, -30), Vector2(-8, -30)]), Color("#b0873a"))
+			for i in 3:
+				var sy := fmod(_t * 18.0 + i * 9.0, 26.0)
+				draw_circle(Vector2(sin(_t * 2.0 + i) * 3.0, -32 - sy), 3.0 + sy * 0.15, Color(0.85, 0.85, 0.9, 0.35 * (1.0 - sy / 26.0)))
 		"campfire":
 			draw_rect(Rect2(-10, -2, 20, 4), Color.html("#4a3422"))
 			var f := sin(_t * 12.0) * 2.0

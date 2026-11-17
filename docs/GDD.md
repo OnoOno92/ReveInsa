@@ -57,7 +57,8 @@ explore → gather / hunt → feed Gu, eat → buy / refine Gu → rearrange ape
 - [ ] Trigger passives (on kill, on hurt, low HP) and named synergy pairs.
 - [x] Per-drop Gu rolls: potential (power/speed/efficiency/durability), 12 natures, 1/512 shiny, grades F-S, source-based roll ranges, refinement inherits the soul, grade-based sell price.
 - [x] Wild Gu sightings: rumours matched to habitat (8 habitats, moon Gu at night), map markers, channel-to-capture with decay, damage interruption, escape roll.
-- [ ] Alchemy furnace and pills; Gu-food garden plots with rot, tending and auto-feed.
+- [x] Alchemy furnace (buildable, permanent; settlements have one) and 8 pills: heal, essence, feed-all-Gu, armor/speed/damage/night-sight buffs, breakthrough aid. Alchemy mastery (success + double brew).
+- [ ] Gu-food garden plots with rot, tending and auto-feed.
 - [ ] Breakthrough tribulation as a Dao-themed arena boss; qi deviation on failure.
 - [ ] Nemesis: a named demonic rival who grows, roams, ambushes and returns stronger.
 

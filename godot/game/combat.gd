@@ -287,6 +287,7 @@ func _hit(e: Node, dmg: float, src: Dictionary) -> void:
 	if from_player:
 		if Game.p["hp"] < Game.max_hp() * 0.5:
 			dmg *= 1.0 + Game.stat("berserk")
+		dmg *= 1.0 + Game.stat("damage_buff") # Battle Fury Pill
 		if randf() < Game.stat("crit"):
 			dmg *= 2.0
 			crit = true

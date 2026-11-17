@@ -18,16 +18,53 @@ const ITEMS := {
 	"jade_shard": {"name": "Jade Shard", "desc": "Rare mineral used to refine White Jade Gu.", "color": "#a8e6cf", "price": 12},
 	"thunder_crystal": {"name": "Thunder Crystal", "desc": "Crackles with stored lightning.", "color": "#d1b3ff", "price": 10},
 	"beast_core": {"name": "Beast King Core", "desc": "The condensed will of a beast king.", "color": "#ffcc33", "price": 80},
+	# ---------------- Pills (brewed at an alchemy furnace) ----------------
+	# pill.instant: hp / essence (fractions of max), feed_all_gu; pill.buff: stat bonuses for `seconds`
+	"pill_vitality": {"name": "Vitality Pill", "desc": "Instantly restores 40% of your HP.", "color": "#ff7a7a", "price": 8,
+		"pill": {"instant": {"hp": 0.4}}},
+	"pill_essence": {"name": "Primeval Essence Pill", "desc": "Instantly refills 60% of your primeval essence.", "color": "#7fe0a0", "price": 10,
+		"pill": {"instant": {"essence": 0.6}}},
+	"pill_nourish": {"name": "Gu-Nourishing Pill", "desc": "Dissolves into your aperture and feeds every Gu at once.", "color": "#e0c070", "price": 14,
+		"pill": {"instant": {"feed_all_gu": 1}}},
+	"pill_iron": {"name": "Iron Skin Pill", "desc": "+15 armor for 90 seconds.", "color": "#b8b8c8", "price": 9,
+		"pill": {"buff": {"armor": 15.0}, "seconds": 90.0}},
+	"pill_wind": {"name": "Swift Wind Pill", "desc": "+25% move speed for 90 seconds.", "color": "#a8f5dc", "price": 8,
+		"pill": {"buff": {"move_speed": 0.25}, "seconds": 90.0}},
+	"pill_fury": {"name": "Battle Fury Pill", "desc": "+25% damage for 60 seconds.", "color": "#ff9a3c", "price": 12,
+		"pill": {"buff": {"damage_buff": 0.25}, "seconds": 60.0}},
+	"pill_night": {"name": "Night Sight Pill", "desc": "Your eyes drink the moonlight: much wider vision for 150 seconds.", "color": "#bfe0ff", "price": 7,
+		"pill": {"buff": {"light_radius": 140.0, "reveal": 4.0}, "seconds": 150.0}},
+	"pill_breakthrough": {"name": "Breakthrough Aid Pill", "desc": "Your next cultivation session counts for 1.5x progress.", "color": "#ffd76b", "price": 30,
+		"pill": {"instant": {"breakthrough_aid": 1}}},
 }
 
 # output: {item | gu | place} ; gu_input consumes one Gu of that id (refinement)
 const RECIPES := [
 	{"id": "campfire", "name": "Campfire", "needs": {"wood": 6, "stone": 2}, "output": {"place": "campfire"},
 		"desc": "Light in the dark. Needed for cooking."},
+	{"id": "furnace", "name": "Alchemy Furnace", "needs": {"stone": 10, "wood": 6, "bone": 2}, "output": {"place": "furnace"},
+		"desc": "A permanent stone furnace for brewing pills. Settlements already have one."},
 	{"id": "cook_meat", "name": "Roast Meat", "needs": {"meat": 1}, "near_fire": true, "output": {"item": "cooked_meat"},
 		"desc": "Cook raw meat over a fire."},
 	{"id": "brew_wine", "name": "Bamboo Wine", "needs": {"berries": 4, "herb": 1}, "near_fire": true, "output": {"item": "wine"},
 		"desc": "Ferment berries over a low flame."},
+	# ---------------- Alchemy (needs a furnace) ----------------
+	{"id": "a_vitality", "name": "Vitality Pill", "needs": {"herb": 3, "berries": 2}, "station": "furnace", "output": {"item": "pill_vitality"},
+		"desc": "Instant 40% heal."},
+	{"id": "a_essence", "name": "Primeval Essence Pill", "needs": {"moon_orchid": 2, "herb": 1}, "stones": 5, "station": "furnace", "output": {"item": "pill_essence"},
+		"desc": "Refill 60% essence."},
+	{"id": "a_nourish", "name": "Gu-Nourishing Pill", "needs": {"moon_orchid": 1, "meat": 2, "herb": 2}, "stones": 8, "station": "furnace", "output": {"item": "pill_nourish"},
+		"desc": "Feeds every Gu at once."},
+	{"id": "a_iron", "name": "Iron Skin Pill", "needs": {"stone": 4, "bone": 2, "herb": 1}, "station": "furnace", "output": {"item": "pill_iron"},
+		"desc": "+15 armor for 90s."},
+	{"id": "a_wind", "name": "Swift Wind Pill", "needs": {"berries": 3, "herb": 2}, "station": "furnace", "output": {"item": "pill_wind"},
+		"desc": "+25% speed for 90s."},
+	{"id": "a_fury", "name": "Battle Fury Pill", "needs": {"meat": 2, "thunder_crystal": 1, "herb": 1}, "station": "furnace", "output": {"item": "pill_fury"},
+		"desc": "+25% damage for 60s."},
+	{"id": "a_night", "name": "Night Sight Pill", "needs": {"moon_orchid": 2, "berries": 2}, "station": "furnace", "output": {"item": "pill_night"},
+		"desc": "Wide night vision for 150s."},
+	{"id": "a_breakthrough", "name": "Breakthrough Aid Pill", "needs": {"jade_shard": 2, "moon_orchid": 3}, "stones": 30, "station": "furnace", "output": {"item": "pill_breakthrough"},
+		"desc": "Next cultivation session x1.5."},
 	{"id": "r_vitality", "name": "Refine: Vitality Leaf Gu", "needs": {"herb": 6}, "stones": 12, "output": {"gu": "vitality_leaf"},
 		"desc": "Refine a new healing Gu from herbs."},
 	{"id": "r_spider", "name": "Refine: Spider Silk Gu", "needs": {"bone": 2, "herb": 3}, "stones": 15, "output": {"gu": "spider_silk"},
@@ -58,7 +95,8 @@ const SHOPS := {
 		"name": "Shang Clan Trading Hall",
 		"gu": ["wind_blade", "water_shield", "spider_silk", "jade_bone", "bronze_skin", "essence_spring",
 			"moon_glow", "thunder_bead", "fire_ember", "wood_thorn", "gust", "jade_skin", "four_flavors"],
-		"items": ["rice_ball", "wine", "moon_orchid", "thunder_crystal", "jade_shard", "cooked_meat"],
+		"items": ["rice_ball", "wine", "moon_orchid", "thunder_crystal", "jade_shard", "cooked_meat",
+			"pill_vitality", "pill_essence", "pill_nourish"],
 	},
 }
 
@@ -70,3 +108,12 @@ static func recipe(id: String) -> Dictionary:
 
 static func color(id: String) -> Color:
 	return Color.html(ITEMS[id]["color"])
+
+
+## Recipe tab: "craft" | "refine" (Gu) | "alchemy" (pills)
+static func category(r: Dictionary) -> String:
+	if r.get("station", "") == "furnace":
+		return "alchemy"
+	if r["output"].has("gu"):
+		return "refine"
+	return "craft"
